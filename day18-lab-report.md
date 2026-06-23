@@ -1,411 +1,249 @@
-# Day 18 — Human-Centered AI Design
-## Lab Report: AI Literature Review System
+# Day 18 Lab — Human-Centered AI Design
 
-> **Track:** Track 1 — AI Product Management  
-> **Họ và tên:** Trần Nguyễn Anh Thư
-> **Mã học viên:** 2A202600915
-> **Dự án:** Option 4 — Dự án nhóm đang phát triển  
-> **Prototype:** `day18-prototype.html`
+**Trần Nguyễn Anh Thư - 2A202600915**
 
----
+## Feature: Claim Verification & Routing (Step ⑧⑨ — Academic Research Assistant)
 
-## 1. Người dùng, vấn đề và lát cắt tính năng
+**Dự án gốc:** AI hỗ trợ literature review & research-gap detection (LLM + RAG + Semantic Scholar API)
+**Feature slice được chọn:** Claim Verification & Routing — màn hình `ClaimVerifier.jsx`
 
-### Ai là người dùng?
-
-Hai nhóm người dùng chính:
-
-- **Researchers** — người đang viết bài báo khoa học, cần literature review chặt chẽ về nguồn trích dẫn
-- **Thesis students** — sinh viên sau đại học cần tổng quan tài liệu cho luận văn, thường không quen với quy trình tìm paper thủ công
-
-Điểm chung: họ **biết mình cần gì** (literature review về một topic cụ thể) nhưng **không có thời gian và công cụ** để đọc hàng trăm paper, tổng hợp claims và format citations một cách thủ công.
-
-### Vấn đề cụ thể
-
-Literature review truyền thống có 3 pain point lớn:
-
-1. **Tìm paper mất rất nhiều thời gian** — query Google Scholar, đọc abstract, lọc thủ công
-2. **Citations dễ sai hoặc thiếu** — nhất là khi viết dưới áp lực deadline
-3. **Khó kiểm soát hướng nghiên cứu** — nếu AI tự generate toàn bộ mà không có checkpoint, output có thể lệch hoàn toàn so với góc mà researcher muốn
-
-### Lát cắt được chọn
-
-> **"User được can thiệp vào định hướng của hệ thống xuyên suốt quy trình tạo literature review"**
-
-Đây là lát cắt từ lúc user nhập topic cho đến khi nhận được full literature review — nhưng quan trọng hơn là **3 điểm dừng có kiểm soát** ở giữa, nơi user có thể chỉnh hướng trước khi AI đi tiếp.
-
-**Tại sao không chọn lát cắt khác?**
-
-Lúc đầu, nhóm nghĩ đến lát cắt "save → edit LaTeX → export" — nhưng lát cắt đó chủ yếu là user action, AI đóng vai trò passive. Không có đủ AI interaction moments để thiết kế. Lát cắt hiện tại phong phú hơn vì AI đưa ra quyết định ở mỗi bước và user phải có khả năng kiểm tra, chỉnh sửa, rescue.
 
 ---
 
-## 2. Kiến trúc hệ thống: 4 Requests, 3 Interrupts
+## 1. Tổng quan bối cảnh
 
-Hệ thống hoạt động theo pipeline 4 API requests với 3 điểm dừng bắt buộc:
+Sau khi LLM viết xong nội dung cho 1 theme (Step ⑦), hệ thống chạy verification 3 tầng cho từng claim trong bài (Step ⑧):
+- **Case A (snippet):** Semantic Scholar trả về đoạn trích trực tiếp — độ tin cậy cao nhất (~30% coverage)
+- **Case B (arxiv fulltext):** Lấy toàn văn qua ar5iv — độ tin cậy cao (~80%+ coverage cho CS/AI)
+- **Case C (abstract-only):** Chỉ có tóm tắt — không bao giờ trả "Supported", luôn cần con người xem lại
 
-```
-R1: POST /api/research/stream
-    Body: {"query": "...", "thread_id": null}
-    → AI tạo plan: 5 sub-queries + nguồn tìm paper
-    ⏸ INTERRUPT 1 — Plan Review (user approve/edit)
-
-R2: POST /api/research/resume
-    Body: {"thread_id": "<id>", "resume_value": true}
-    → AI fetch papers, đọc abstracts, cluster thành outline
-    ⏸ INTERRUPT 2 — Outline Approval (user approve/split/merge)
-
-R3: POST /api/research/resume
-    Body: {"thread_id": "<id>", "resume_value": true}
-    → AI phân loại 57 claims: included / needs-review / removed
-    ⏸ INTERRUPT 3 — Claims Routing (user review removed claims)
-
-R4: POST /api/research/resume
-    Body: {"thread_id": "<id>", "resume_value": true}
-    → AI generate full literature review
-    ✅ OUTPUT — Edit LaTeX, export PDF/MD/BibTeX
-```
-
-**Tại sao thiết kế theo pipeline interrupt?**
-
-Nếu AI chạy thẳng từ query đến output (không dừng), thì khi output sai — user phải restart toàn bộ từ đầu. Chi phí rất cao. Ba interrupt cho phép user "rẽ nhánh" tại điểm rủi ro cao nhất, trước khi AI đã tiêu tốn quá nhiều compute.
+Routing logic (Step ⑨) quyết định: claim nào tự giữ, claim nào tự xóa (có log + khôi phục), claim nào bắt buộc đưa cho user quyết. Feature slice này thiết kế lại toàn bộ trải nghiệm xung quanh việc user xem, hiểu, và can thiệp vào quyết định của AI ở bước này.
 
 ---
 
-## 3. Vòng đời trải nghiệm (4 giai đoạn bắt buộc)
+## 2. Bản đồ 5 kịch bản theo Generic Scenario Pack (P0–P6)
 
-```
-[A] Onboarding
-      ↓
-[B] Trong khi AI hỗ trợ — R1 → Interrupt 1 → R2 → Interrupt 2
-      ↓
-[C] Sau hành động / Review — R3 → Interrupt 3 → R4 → Output
-      ↓
-[D] Feedback, sửa lỗi & khôi phục ↺ (quay lại kết quả tốt hơn)
-```
+| # | Pack | Loại | Tên kịch bản |
+|---|---|---|---|
+| 1 | P0 | Onboarding (bắt buộc) | Lần đầu mở màn hình Claim Verifier |
+| 2 | P2 | During — multiple valid options | Claim "Partially Supported" |
+| 3 | P3 | During — agency boundary | AI tự xóa claim "Unsupported" |
+| 4 | P4 | Error/Uncertainty | Nhiều claim Case C (abstract-only) bị đẩy review |
+| 5 | P5/P6 | Error & Recovery | AI đoán sai "contrasting intent" + vòng feedback |
 
-Tất cả 6 scenarios đều nằm trong một lát cắt thống nhất — không phải 5 mini-app rời rạc.
+Đủ điều kiện tối thiểu của đề: 1 onboarding + ≥2 during + ≥2 error/recovery, toàn bộ nối liền thành một luồng Claim Verification thống nhất (không phải các đoạn rời rạc).
 
 ---
 
-## 4. Scenarios
+## 3. Chi tiết 5 kịch bản
 
-### P0 — Onboarding (Giai đoạn A) `[Bắt buộc]`
+### Kịch bản 1 — P0: Onboarding
 
-**Bối cảnh:** Researcher lần đầu mở tính năng AI Literature Review. Họ chưa biết AI làm được gì cụ thể, cần dữ liệu gì, và giới hạn ở đâu.
+**Bối cảnh:** User vừa hoàn thành Step ⑦, hệ thống verify xong, chuyển sang `ClaimVerifier.tsx` lần đầu trong session.
 
-**Thiết kế onboarding:**
+**Trạng thái 1 — AI đang xử lý:** Thanh progress "Đang kiểm tra nguồn cho 12 claims..." kèm số đếm. Không có nút bấm — hành động AI tự làm (Act), không ảnh hưởng nội dung, dễ hoàn tác.
 
-UI hiển thị hai cột song song rõ ràng ngay từ đầu:
+**Trạng thái 2 — Màn hình chính khi verify xong:**
+- Header giải thích 1 lần: "AI đã kiểm tra từng câu trong bài viết với nguồn gốc của nó. Mỗi câu được gắn 1 trong 4 mức: Đã xác minh / Xác minh một phần / Không xác minh được / Cần bạn xem lại."
+- Danh sách claim dạng card: đoạn text claim, badge nguồn (snippet/arxiv/abstract, abstract có icon "độ tin cậy thấp"), trạng thái, nút hành động — chỉ hiện nút với claim cần user quyết; claim "Supported + nguồn mạnh" chỉ có nhãn "Đã tự động giữ lại" + link xem nguồn.
+- Dòng tóm tắt cuối danh sách: "8 claims tự động giữ, 3 claims cần bạn xem, 1 claim đã tự xóa."
 
-| ✅ AI có thể hỗ trợ | ❌ AI không tự làm |
+**User bấm được gì:** Bấm badge nguồn → mở rộng xem trích đoạn gốc (evidence/explainability layer). Với claim cần quyết: Approve/Reject. Mọi xóa khôi phục được qua tab "Đã xóa".
+
+**Vì sao thiết kế vậy:** AI không tự quyết hết (hậu quả sai ảnh hưởng academic integrity) nhưng cũng không hỏi mọi claim (tránh quá tải) — tự lọc theo độ tin cậy 3-tier.
+
+---
+
+### Kịch bản 2 — P2: Claim "Partially Supported"
+
+**Bối cảnh:** Claim ở mức "Partially Supported" — nguồn tìm được chỉ khớp một phần claim (ví dụ claim tổng quát hóa quá mức so với nguồn).
+
+**Màn hình:** Badge cam "Partially Supported". Hiển thị 2 đoạn song song: "Claim viết:" / "Nguồn tìm được:" — để user tự so sánh, AI không diễn giải hộ. Dòng gợi ý: "AI thấy nguồn chỉ khớp một phần với claim này — có thể do claim tổng quát hóa quá mức, hoặc do nguồn chưa đủ chi tiết."
+
+**3 nút hành động:** Giữ nguyên / Sửa claim (mở ô edit) / Xóa. Ba lựa chọn vì đây không có 1 đáp án đúng duy nhất (P2 — multiple valid options).
+
+**Act/Ask:** Ask bắt buộc — AI tự nhận mơ hồ, hậu quả sai liên quan academic integrity.
+
+---
+
+### Kịch bản 3 — P3: AI tự xóa claim "Unsupported"
+
+**Bối cảnh:** Claim "Unsupported" (nguồn xác nhận mâu thuẫn) → hệ thống tự xóa + ghi log, không hỏi trước.
+
+**Màn hình:** Claim biến khỏi danh sách chính, để lại dòng mờ: "Đã tự động xóa 1 câu do không tìm được nguồn ủng hộ — [Xem chi tiết]". Bấm vào → câu đã xóa, nguồn đã kiểm tra + lý do mâu thuẫn, 2 nút: Khôi phục / Đồng ý xóa. Tất cả xóa tự động gom vào tab "Đã xóa tự động (3)".
+
+**Vì sao là Act (có giám sát), không phải Ask:** Tín hiệu mâu thuẫn rõ ràng nhất trong 3-tier verification (dễ phát hiện đúng), dễ hoàn tác (chỉ ẩn khỏi markdown, không xóa dữ liệu gốc), hậu quả sai chỉ là thiếu sót sửa được. Nhưng không Act âm thầm — luôn hiện log + nút khôi phục ngay tại chỗ.
+
+---
+
+### Kịch bản 4 — P4: Nhiều claim Case C (abstract-only) bị đẩy review
+
+**Bối cảnh:** Case C không bao giờ trả "Supported". Với theme dùng nhiều paper ít phổ biến, nhiều claim hợp lệ vẫn bị đẩy vào hàng đợi review — không phải vì sai, mà vì thiếu dữ liệu.
+
+**Màn hình:** Badge riêng màu xám-vàng "Chưa đủ dữ liệu để xác minh" (phân biệt rõ với cam/đỏ). Dòng giải thích: "AI chỉ tìm được tóm tắt (abstract) của nguồn này, không có toàn văn — nên không thể xác minh chi tiết. Không có nghĩa là claim sai." Nếu >30% claim trong theme thuộc case này → banner tổng đầu trang gợi ý user tự kiểm tra kỹ hơn (tín hiệu Mức 2 — gợi ý theo ngữ cảnh).
+
+**Vì sao tách badge riêng:** Lý do mơ hồ ở đây khác (thiếu dữ liệu, không phải nguồn mâu thuẫn) — gộp chung với "AI có thể sai" sẽ làm user hiểu sai bản chất rủi ro và cách xử lý (tự tìm thêm thông tin, không phải nghi ngờ AI).
+
+**Act/Ask:** Ask — AI biết rõ giới hạn của mình (Case C luôn route review theo thiết kế), không có lý do tự quyết.
+
+---
+
+### Kịch bản 5 — P5/P6: AI đoán sai "contrasting intent" + vòng feedback
+
+**Bối cảnh:** Hệ thống phát hiện claim có vẻ mâu thuẫn với lập luận chung của theme → đẩy vào `human_review_priority` bất kể kết quả verify nguồn. Đây là suy đoán dễ sai nhất — claim trái chiều có thể là chủ đích của user (ví dụ viết phần "hạn chế của phương pháp").
+
+**Màn hình:** Badge "🔺 Ưu tiên xem" + giải thích: "Câu này có vẻ trái chiều với phần lập luận chung của theme — AI đẩy lên ưu tiên để bạn xác nhận có đúng ý không." 2 nút: **Đồng ý** (claim này cố ý trái chiều, không phải lỗi) / **Không đồng ý** (AI hiểu sai, đây không trái chiều).
+
+Khi bấm "Không đồng ý" → ô input không bắt buộc: "Bạn có thể cho biết vì sao không? (giúp AI tránh lặp lại)" (explicit feedback). Badge biến mất ngay trong session (phản hồi tức thì).
+
+**Vòng Feedback → Recovery:** Ở lần verify theme tiếp theo, nếu pattern tương tự xuất hiện lại, AI hiển thị: "Trước đó bạn đã đánh dấu 1 case tương tự là 'không phải lỗi' — AI vẫn đẩy lên review vì muốn chắc chắn, nhưng đã giảm độ ưu tiên." AI **không tắt hẳn** cảnh báo chỉ sau 1 feedback, vì hành vi đơn lẻ không phải ground truth tuyệt đối.
+
+**Act/Ask:** Ask — suy đoán "ý định trái chiều" có độ tin cậy thấp nhất trong toàn pipeline (dựa ngữ nghĩa, không dựa verify nguồn).
+
+---
+
+## 4. Bảng Act / Ask / Don't Act (tổng hợp)
+
+| Tình huống | Mức độ | Vì sao |
+|---|---|---|
+| Verify nguồn cho từng claim (chạy ngầm) | **Act** | Bước nội bộ, không ảnh hưởng nội dung cuối, không cần user thấy |
+| Claim Supported + nguồn mạnh (snippet/arxiv) | **Act** | Độ tin cậy cao nhất theo 3-tier, dễ hoàn tác (user vẫn đọc lại được) |
+| Claim Unsupported (nguồn mâu thuẫn rõ) | **Act có giám sát** | Tín hiệu mâu thuẫn rõ ràng, hậu quả sai chỉ là thiếu sót, có nút khôi phục ngay |
+| Claim Partially Supported | **Ask** | AI tự nhận mơ hồ, hậu quả sai liên quan academic integrity |
+| Claim chỉ có abstract (Case C) | **Ask** | Thiếu dữ liệu để xác minh, AI biết rõ giới hạn của mình |
+| Claim "contrasting intent" (đẩy ưu tiên review) | **Ask** | Suy đoán có độ tin cậy thấp nhất (dựa ngữ nghĩa, không dựa verify nguồn) |
+| Tự động xóa hẳn dữ liệu gốc (không cho khôi phục) | **Don't Act** | Không nằm trong thiết kế — mọi xóa đều giữ log + khôi phục được |
+
+---
+
+## 5. Bảng 2×2 Feedback Matrix (đầy đủ rationale 8 điểm)
+
+| | **Explicit** | **Implicit** |
+|---|---|---|
+| **User → System** | Bấm "Đồng ý"/"Không đồng ý" ở claim contrasting-intent + ô input lý do (kịch bản 5) | Bấm "Sửa claim" thay vì "Giữ nguyên"/"Xóa" ở claim Partially Supported (kịch bản 2) |
+| **System → User** | Banner tổng khi >30% claim là Case C (kịch bản 4) | Progress bar verify + badge màu phân biệt loại uncertainty (kịch bản 1, 4) |
+
+### 5.1 User → System / Explicit — "Đồng ý / Không đồng ý" + lý do
+1. **Thời điểm:** Ngay sau khi bấm, lúc lý do còn rõ trong đầu user.
+2. **Mục tiêu:** Biết AI có đang suy đoán "ý định trái chiều" sai pattern không.
+3. **Vì sao explicit:** Lý do "không đồng ý" có thể rất khác nhau — chỉ suy luận từ hành vi sẽ không phân biệt được.
+4. **Cách hiểu khác:** User có thể bấm vì thực sự nghĩ AI sai, hoặc vì muốn bỏ qua nhanh không đọc kỹ.
+5. **Phản hồi tức thì:** Badge "Ưu tiên xem" biến mất ngay trong session.
+6. **Dùng để làm gì:** Giảm priority cho pattern tương tự ở lần verify sau, không tắt hẳn cảnh báo.
+7. **User biết/kiểm soát:** Có — dòng "Trước đó bạn đã đánh dấu..." cho thấy rõ phản hồi cũ đang ảnh hưởng gì.
+8. **Overload:** Không — ô lý do không bắt buộc.
+
+### 5.2 User → System / Implicit — bấm "Sửa claim"
+1. **Thời điểm:** Ngay khi user click "Sửa claim" thay vì giữ/xóa.
+2. **Mục tiêu:** Phát hiện claim Partially Supported thường cần sửa hơn giữ/xóa nguyên trạng.
+3. **Vì sao implicit:** Hành vi tự nhiên trong luồng làm việc, không cần hỏi thêm để không gây gián đoạn.
+4. **Cách hiểu khác:** User có thể sửa vì lý do văn phong, không liên quan độ tin cậy nguồn.
+5. **Phản hồi tức thì:** Ô edit mở ngay, không cần xác nhận thêm.
+6. **Dùng để làm gì:** Theo dõi tỷ lệ Partially Supported cần sửa, ở mức thống kê tổng hợp.
+7. **User biết/kiểm soát:** Không trực tiếp — đây là điểm rủi ro cần lưu ý, nên chỉ dùng implicit signal này ở mức thống kê, không dùng để tự động cá nhân hóa quyết định cho từng user.
+8. **Overload:** Không — là hành động bình thường trong luồng.
+
+### 5.3 System → User / Explicit — banner tổng Case C
+1. **Thời điểm:** Ngay khi mở danh sách claim, trước khi đọc chi tiết.
+2. **Mục tiêu:** Giúp user hiểu nhanh vì sao có nhiều claim cần review, tránh suy luận sai "bài có vấn đề."
+3. **Vì sao nói rõ trực tiếp:** Cảnh báo quan trọng cần nói thẳng, không để user tự đoán qua màu badge.
+4. **Cách hiểu khác (rủi ro phía người nhận):** User có thể hiểu nhầm "nhiều claim không xác minh được" = "bài có nhiều lỗi" nếu không giải thích rõ.
+5. **Phản hồi tức thì:** Banner hiện ngay, mất khi user đã dismiss hoặc xem qua hết case trong theme.
+6. **Dùng để làm gì:** Định hướng nơi cần đọc kỹ, không thay quyết định của user.
+7. **User biết/kiểm soát:** Có thể dismiss, không lặp lại trong cùng theme.
+8. **Overload:** Chỉ hiện khi vượt ngưỡng 30%, tránh hiện liên tục không cần thiết.
+
+### 5.4 System → User / Implicit — progress bar + badge màu
+1. **Thời điểm:** Liên tục trong suốt quá trình verify và đọc danh sách.
+2. **Mục tiêu:** Giữ user luôn biết trạng thái xử lý/loại uncertainty mà không cần đọc text dài.
+3. **Vì sao implicit:** Tín hiệu thị giác nền, không cần đọc để hiểu tiến trình.
+4. **Cách hiểu khác:** Màu sắc có thể bị hiểu lầm nếu user không quen hệ thống màu — cần giải thích 1 lần ở onboarding (đã có trong header kịch bản 1).
+5. **Phản hồi tức thì:** Cập nhật theo thời gian thực.
+6. **Dùng để làm gì:** Cải thiện UX hiển thị, không thu thập/lưu trữ phân tích hành vi.
+7. **User biết/kiểm soát:** Không cần kiểm soát — đây thuần là hiển thị trạng thái, không phải thu thập dữ liệu.
+8. **Overload:** Không — là visual nền, không yêu cầu hành động.
+
+---
+
+## 6. Lớp Evidence / Explainability
+
+Ở mọi kịch bản, user đều có thể bấm vào badge nguồn để xem trích đoạn gốc (snippet/arxiv fulltext/abstract) mà AI dùng để verify — không cần giải thích cơ chế model, chỉ cần đủ thông tin để user tự quyết định giữ/sửa/xóa. Đây thỏa yêu cầu "ít nhất 1 kịch bản cho phép user xác minh qua evidence hiển thị" — áp dụng xuyên suốt cả 5 kịch bản, rõ nhất ở kịch bản 1 (xem nguồn) và kịch bản 2 (so sánh song song claim vs nguồn).
+
+---
+
+## 7. 10-câu hỏi Design Rationale theo từng kịch bản
+
+### Kịch bản 1 — Onboarding
+1. **AI đang biết gì?** Kết quả verify 3-tier (snippet/arxiv/abstract) cho từng claim, nguồn gốc trích dẫn.
+2. **AI chưa biết/không chắc gì?** Claim có đúng về học thuật tổng thể không — chỉ biết nguồn có khớp văn bản hay không.
+3. **AI đang giả định gì?** Semantic Scholar/arXiv index đầy đủ và đúng cho paper liên quan.
+4. **Điều gì có thể sai?** Verify nhầm đoạn trích, hoặc claim đúng nhưng diễn đạt khác cách nguồn viết nên bị đánh giá thấp.
+5. **Hậu quả nếu sai & ai bị ảnh hưởng?** User mất thời gian review oan, hoặc tin sai vào claim được tự giữ.
+6. **Sai sót dễ phát hiện/hoàn tác không?** Có — luôn xem được nguồn gốc, mọi xóa khôi phục được.
+7. **Act/Ask/Don't Act? Vì sao?** Mix theo độ tin cậy — Act cho case rõ, Ask cho case mơ hồ (xem bảng mục 4).
+8. **User kiểm tra/sửa/từ chối/hoàn tác ở đâu?** Trên card claim — bấm badge xem nguồn, nút Approve/Reject.
+9. **Phản hồi nào được thu thập?** Approve/Reject mỗi claim; mở rộng xem nguồn là tín hiệu implicit về claim cần xem kỹ.
+10. **Flow giúp user tiếp tục mục tiêu thế nào?** Sau khi xử lý xong danh sách, user có bài review hoàn chỉnh để tiếp tục Step ⑨/⑩.
+
+### Kịch bản 2 — Partially Supported
+1. **AI biết gì?** Có nguồn liên quan nhưng chỉ khớp một phần nội dung claim.
+2. **Chưa biết/không chắc gì?** Mức độ tổng quát hóa của claim có đúng ý tác giả gốc không.
+3. **Giả định gì?** Khác biệt claim–nguồn là do tổng quát hóa, không phải do AI hiểu sai văn bản.
+4. **Điều gì có thể sai?** AI đánh giá "khớp một phần" sai — nguồn có thể khớp hoàn toàn nhưng đoạn trích chưa đủ.
+5. **Hậu quả & ai ảnh hưởng?** Academic integrity nếu giữ claim phóng đại; mất nội dung hữu ích nếu xóa nhầm.
+6. **Dễ phát hiện/hoàn tác?** Tương đối dễ — user đọc song song để tự đánh giá; giữ/sửa/xóa đều đơn giản.
+7. **Act/Ask?** Ask bắt buộc.
+8. **User kiểm tra ở đâu?** 2 đoạn song song claim vs nguồn ngay trên card.
+9. **Phản hồi thu thập?** Lựa chọn Giữ/Sửa/Xóa — tín hiệu rõ về việc claim dạng này cần xử lý đặc biệt.
+10. **Flow tiếp tục mục tiêu?** Sau xử lý, claim cập nhật trạng thái cuối, bài tiếp tục sang các claim khác.
+
+### Kịch bản 3 — AI tự xóa Unsupported
+1. **AI biết gì?** Nguồn xác nhận mâu thuẫn trực tiếp với claim.
+2. **Chưa biết/không chắc gì?** Claim có giá trị khác (ví dụ trích để phản biện) mà AI không nhận ra ý đồ.
+3. **Giả định gì?** Claim được viết với ý định khẳng định, không phải dẫn ra để bác bỏ.
+4. **Điều gì có thể sai?** AI xóa nhầm câu mà user chủ đích viết để phản biện/so sánh.
+5. **Hậu quả & ai ảnh hưởng?** Mất nội dung user chủ đích viết, nhưng có thể khôi phục nên thiệt hại thấp.
+6. **Dễ phát hiện/hoàn tác?** Rất dễ — có log + nút khôi phục ngay.
+7. **Act/Ask?** Act có giám sát (log + undo).
+8. **User kiểm tra ở đâu?** Tab "Đã xóa tự động", nút Khôi phục/Đồng ý xóa.
+9. **Phản hồi thu thập?** Khôi phục = tín hiệu AI xóa sai; Đồng ý xóa = tín hiệu AI đúng.
+10. **Flow tiếp tục mục tiêu?** Bài tự động gọn lại, user không cần dừng xử lý ngay, có thể xem cuối buổi.
+
+### Kịch bản 4 — Case C (abstract-only)
+1. **AI biết gì?** Chỉ có abstract, không có toàn văn nguồn.
+2. **Chưa biết/không chắc gì?** Phần chi tiết cụ thể có ủng hộ claim hay không.
+3. **Giả định gì?** Thiếu toàn văn = không thể xác minh, nên không tự tin báo Supported.
+4. **Điều gì có thể sai?** Abstract thực ra đã đủ thông tin nhưng hệ thống quá conservative, gây review thừa.
+5. **Hậu quả & ai ảnh hưởng?** User mất thời gian review claim thực ra ổn — ảnh hưởng hiệu suất, không sai bài.
+6. **Dễ phát hiện/hoàn tác?** Dễ — user đọc abstract trực tiếp để tự quyết nhanh.
+7. **Act/Ask?** Ask.
+8. **User kiểm tra ở đâu?** Mở rộng card xem abstract, banner tổng quan đầu trang.
+9. **Phản hồi thu thập?** Giữ/Xóa — cũng là tín hiệu để cân nhắc tích hợp thêm nguồn (OpenAlex) trong tương lai.
+10. **Flow tiếp tục mục tiêu?** User xử lý nhanh nhóm claim này nhờ hiểu đúng lý do, không bị chặn lâu.
+
+### Kịch bản 5 — Contrasting intent + recovery
+1. **AI biết gì?** Câu có ngữ nghĩa khác biệt/ngược với lập luận chung của theme.
+2. **Chưa biết/không chắc gì?** Sự khác biệt đó có phải chủ đích của user hay không.
+3. **Giả định gì?** Trái chiều ngữ nghĩa = khả năng cao cần xem lại.
+4. **Điều gì có thể sai?** Đoán nhầm chủ đích viết — user có thể chủ đích viết phần phản biện/hạn chế.
+5. **Hậu quả & ai ảnh hưởng?** Làm phiền user không cần thiết; lặp lại nhiều lần dễ gây mất tin tưởng vào hệ thống.
+6. **Dễ phát hiện/hoàn tác?** Dễ — chỉ cần bấm Đồng ý/Không đồng ý, không có hành động phá hủy nào xảy ra trước.
+7. **Act/Ask?** Ask — độ tin cậy suy đoán thấp nhất trong toàn pipeline.
+8. **User kiểm tra/từ chối ở đâu?** 2 nút Đồng ý/Không đồng ý + ô input lý do (không bắt buộc).
+9. **Phản hồi thu thập?** Explicit feedback có lý do, dùng để giảm priority lần sau (không tắt hẳn cảnh báo).
+10. **Flow tiếp tục mục tiêu?** Badge biến mất ngay, user tiếp tục đọc các claim còn lại không bị gián đoạn lâu.
+
+---
+
+## 8. Tổng kết theo điều kiện tối thiểu của đề bài
+
+| Điều kiện | Đáp ứng |
 |---|---|
-| Tạo search queries từ topic | Submit/publish bài của bạn |
-| Tìm và filter papers liên quan | Truy cập paper bị paywall |
-| Summarize + verify claims | Đảm bảo 100% citation chính xác |
-| Generate draft literature review | Xóa claim mà không hỏi bạn |
-| Format citations (APA/IEEE/BibTeX) | Quyết định final thay bạn |
-
-Ngoài ra, có **cảnh báo citation risk** nổi bật:
-
-> ⚠️ AI có thể tạo citation không tồn tại (hallucination). Hệ thống sẽ đánh dấu các claim chưa được verify — bạn nên kiểm tra trước khi dùng.
-
-Cảnh báo này quan trọng vì nếu researcher dùng fake citation trong paper, hậu quả là mất uy tín học thuật. Phải set expectation từ trước.
-
-Sau onboarding, user chỉ cần làm một việc: **nhập research topic** và nhấn Bắt đầu. Không có form dài.
-
-**Design rationale — P0:**
-
-- **AI biết gì?** Chưa biết gì về user, topic, scope nghiên cứu
-- **AI không biết gì?** Research angle cụ thể, loại output cần, nguồn ưu tiên
-- **Agency:** `Don't Act` — AI không được làm gì cho đến khi user input topic
-- **Expectation setting:** Show rõ giới hạn TRƯỚC khi bắt đầu, tránh tình trạng user phát hiện limitation ở bước cuối
-
----
-
-### S1 — Plan Review (Giai đoạn B, Interrupt 1) `[Trong tương tác]`
-
-**Bối cảnh:** User nhập topic "Efficient Transformer Architectures in NLP". AI gọi R1 và tạo plan gồm 5 sub-queries. Tuy nhiên, sub-query #3 quá rộng: "transformer NLP applications general survey" — nó sẽ kéo về hàng trăm paper không liên quan đến angle "efficiency" của user.
-
-**Vấn đề thiết kế:** Nếu AI tự fetch paper với sub-query sai, toàn bộ pipeline từ R2 trở đi sẽ bị lệch. Chi phí restart rất cao.
-
-**Giải pháp:**
-
-- Hệ thống dừng lại và hiện **Interrupt Banner** vàng: "AI đã tạo plan gồm 5 sub-queries. Vui lòng kiểm tra trước khi AI fetch papers."
-- Sub-query bị flag sẽ có màu vàng kèm ghi chú: "⚠️ Query chưa cụ thể, có thể ảnh hưởng đến kết quả tra cứu."
-- User có thể click **✏️ Sửa** ngay trên query đó, edit inline và save
-- Sau khi save, query chuyển sang màu xanh với dấu ✓
-
-**Design rationale — S1:**
-
-- **AI biết gì?** Research topic từ user. Không biết angle cụ thể (efficiency vs applications vs survey)
-- **AI đang assume gì?** Query #3 assume user muốn general survey — nhưng user có thể chỉ muốn efficiency papers
-- **Điều gì có thể sai?** Sub-query quá rộng → AI fetch sai papers → toàn bộ pipeline đi sai hướng từ bước đầu
-- **Hậu quả nếu sai?** Rất đắt — phải restart từ đầu, mất paper results đã fetch
-- **Agency:** `Ask` — bắt buộc phải review TRƯỚC khi fetch papers. Chi phí khi sai quá cao để cho AI tự quyết
-- **Kiểm soát:** User có thể edit từng query, thêm query mới, chọn/bỏ chọn nguồn paper
-
----
-
-### S2 — Outline Approval với Explainability (Giai đoạn B, Interrupt 2) `[Trong tương tác + Explainability]`
-
-**Bối cảnh:** Sau khi R2 hoàn thành, AI cluster 847 papers thành 4 sections. Cluster 3 ("Attention + Positional Encoding") thực ra chứa 2 sub-topics khác nhau: Rotary/Relative position encoding (17 papers) và Cross-attention efficiency (14 papers). AI gộp lại nhưng người đọc sẽ thấy section này incoherent.
-
-**Vấn đề thiết kế:** User không biết tại sao AI cluster theo cách này. Nếu không có explainability, user không có đủ thông tin để quyết định có nên split hay không.
-
-**Giải pháp:**
-
-Mỗi cluster có nút **"▸ Xem lý do AI cluster"** — khi click, expand ra một box giải thích:
-
-> "AI grouped 31 papers nhưng phát hiện 2 sub-clusters rõ ràng: (a) Rotary/Relative position encoding (17 papers) và (b) Cross-attention efficiency (14 papers). AI gộp lại nhưng recommend Thư xem xét split thành 2 sections riêng."
-
-Cluster bị flag màu vàng kèm nút **✂️ Split** — khi click sẽ tách ra thành 2 sections.
-
-**Design rationale — S2:**
-
-- **AI biết gì?** 847 papers với abstracts và keywords. Biết có 2 sub-clusters trong cluster 3
-- **AI đang assume gì?** Gộp 2 sub-topics vào 1 section cho ngắn gọn — nhưng user muốn review mạch lạc hơn
-- **Explainability:** "Xem lý do cluster" → show keywords chung, % overlap. User hiểu WHY, không chỉ thấy WHAT
-- **Agency:** `Ask` — AI tự cluster nhưng phải hỏi user approve. Với cluster suspect, AI chủ động flag thay vì chờ user phát hiện
-- **Kiểm soát:** Reorder, Split, Merge, Thêm section thủ công — user giữ toàn quyền với structure
-
----
-
-### S3 — Rescue Claim bị xóa sai (Giai đoạn C, Interrupt 3) `[Failure & Recovery]`
-
-**Bối cảnh:** R3 phân loại 57 claims. Claim "Sparse attention reduces memory complexity from O(n²) to O(n√n) for sequences >2048 tokens" bị đưa vào bucket **Removed** vì AI không tìm thấy 2+ papers verify trong database. Nhưng thực ra đây là một claim quan trọng, có trong Child et al. 2019 — AI chỉ đang miss source.
-
-**Vấn đề với thiết kế ban đầu ("informational only"):** Nếu Interrupt 3 chỉ là thông tin (không cho rescue), user sẽ mất claim quan trọng mà không biết. Đây là lý do nhóm đổi design từ "informational" sang "có rescue loop".
-
-**Giải pháp:**
-
-- Hiện tổng hợp 3 buckets: **38 Included / 12 Needs Review / 7 Removed**
-- Removed claims được dim nhưng KHÔNG bị xóa hoàn toàn — kèm lý do AI loại
-- User có nút **🔄 Rescue** trên từng claim
-- Khi click Rescue: mở panel để user paste DOI hoặc title của paper nguồn
-- Sau khi submit: AI verify → nếu tìm thấy, claim move sang "Needs Review" để user confirm lại → sau đó vào "Included"
-- Hệ thống confirm: "✓ Source provided: Child et al., 2019. AI đang verify..."
-
-**Design rationale — S3:**
-
-- **Tại sao không để "informational only"?** AI có thể loại sai claim quan trọng. "Informational only" = user mất claim mà không biết. Hậu quả: literature review thiếu evidence quan trọng
-- **Agency:** `Act` cho included claims (rủi ro thấp) · `Ask` cho removed claims (hậu quả lớn nếu xóa sai)
-- **Recovery loop hoàn chỉnh:** User cung cấp source → AI verify → move sang "needs review" → user confirm → included. Không có dead end
-- **Implicit feedback:** Khi user rescue claim, AI ghi nhận loại source nào bị miss → cải thiện future search
-
----
-
-### S4 — Citation Hallucination Recovery (Giai đoạn C/D) `[Failure & Recovery + Explainability]`
-
-**Bối cảnh:** Trong output của R4, có một citation "[Lin et al., 2021]" được AI synthesize nhưng paper này không tồn tại trong bất kỳ database nào đã fetch. Citation nghe hợp lý nhưng là hallucination.
-
-**Đây là failure mode nghiêm trọng nhất** trong hệ thống này vì nếu researcher dùng fake citation trong paper → academic dishonesty → có thể bị retract.
-
-**Giải pháp:**
-
-Citations trong output được highlight theo 3 màu:
-- 🟢 Xanh: verified (tìm thấy trong Semantic Scholar hoặc Arxiv)
-- 🟡 Vàng: suspect (chưa verify đủ)
-- 🔴 Đỏ: không tìm thấy source
-
-Khi user click vào `[Lin et al., 2021]` (màu đỏ), mở ra panel giải thích:
-
-> "AI không tìm thấy paper này trong bất kỳ nguồn nào đã fetch. Paper có thể không tồn tại, hoặc AI đã synthesize citation từ nhiều nguồn khác nhau."
-
-Kèm theo phần **"Bằng chứng AI đang dùng"**:
-- Claim "O(n√n) complexity" — tìm thấy concept này trong Child et al. 2019
-- Nhưng "Lin et al., 2021" cụ thể → không có record trong database
-- Đây có thể là hallucinated citation
-
-User có 3 lựa chọn:
-1. 🗑️ **Xóa citation này**
-2. 🔄 **Thay bằng Child et al. 2019** (paper thật có claim tương tự)
-3. 🔍 **Tôi sẽ tự tìm paper**
-
-Sau khi fix, hệ thống confirm: "✓ Đã thay [Lin et al., 2021] → [Child et al., 2019]. AI sẽ ghi nhớ để không repeat lỗi này trong section tiếp theo."
-
-**Design rationale — S4:**
-
-- **Điều gì có thể sai?** AI synthesize citation không tồn tại
-- **Hậu quả?** Rất nghiêm trọng — ảnh hưởng uy tín nghiên cứu, có thể bị retract paper
-- **Sai sót có dễ phát hiện không?** Không, vì citation nghe rất hợp lý. Do đó hệ thống phải CHỦ ĐỘNG đánh dấu, không chờ user tự phát hiện
-- **Explainability:** Show "bằng chứng AI đang dùng" → user thấy AI suy luận từ đâu, không chỉ nói "citation sai"
-- **Recovery:** 3 paths rõ ràng, không dead end. AI confirm đã ghi nhớ fix để không lặp lại
-
----
-
-### S5 — Auto-format Citations (Agency: Act) `[Agency]`
-
-**Bối cảnh:** Sau khi output được generate, AI phát hiện citations trong document dùng 2 style khác nhau: 3 citations theo APA, 2 citations theo IEEE. User muốn export sang LaTeX với BibTeX.
-
-**Thiết kế:**
-
-AI chủ động đề xuất trong một notification nhỏ màu xanh:
-
-> "🤖 AI phát hiện 3 citations dùng APA, 2 dùng IEEE. Muốn tôi tự động convert tất cả sang BibTeX/IEEE?"
-> 
-> "Dễ undo — bạn có thể revert bất kỳ lúc nào"
-
-User có thể nhấn "✓ Auto-format" hoặc "Không, tôi tự làm".
-
-**Design rationale — S5 (Act):**
-
-Đây là một trong số ít chỗ trong prototype mà AI được **Act** (tự làm mà không cần xin phép trước), vì:
-
-- **Rủi ro thấp:** format citations không ảnh hưởng đến content
-- **Dễ undo:** có thể revert ngay lập tức
-- **User nhìn thấy ngay:** output rõ ràng, dễ kiểm tra
-- **Tiết kiệm thời gian:** format thủ công hàng chục citations rất tốn công
-
-Nguyên tắc: "Hành động có rủi ro thấp, người dùng nhìn thấy ngay và có thể hoàn tác, vì vậy AI được tự thực hiện."
-
----
-
-## 5. Mức độ tự chủ: Act / Ask / Don't Act
-
-| Kịch bản | Level | Lý do |
-|---|---|---|
-| P0: Chưa có topic | `Don't Act` | AI không có đủ thông tin để làm bất kỳ điều gì |
-| S1: Fetch papers | `Ask` | Chi phí restart cao, sub-query sai = sai từ gốc |
-| S2: Cluster papers | `Ask` | User cần approve structure trước khi AI generate claims |
-| S3: Included claims | `Act` | Rủi ro thấp, claim đã có 2+ sources verify |
-| S3: Removed claims | `Ask` | Hậu quả lớn nếu xóa nhầm claim quan trọng |
-| S4: Flag suspect citation | `Act` | AI phát hiện và đánh dấu, nhưng không tự xóa |
-| S4: Thay thế citation | `Ask` | User phải chọn replacement, không được tự quyết |
-| S5: Auto-format citations | `Act` | Rủi ro thấp, dễ undo, user thấy ngay |
-| Publish/submit bài | `Don't Act` | Nằm ngoài thẩm quyền của AI, rủi ro cực cao |
-
-Prototype có đủ cả 3 levels, phân bổ theo logic rõ ràng.
-
----
-
-## 6. Feedback hai chiều: Ma trận 2×2
-
-### User → System (Explicit)
-
-Người dùng **chủ động** đưa tín hiệu cho hệ thống:
-
-- **S1:** User edit sub-query #3 "quá rộng" → submit revised query → AI biết angle research cụ thể hơn
-- **S3:** User click "Rescue" + cung cấp DOI cho removed claim → AI biết đang miss loại source nào
-- **S4:** User click "Thay bằng paper thật" → AI biết cách tìm evidence đúng cho claim loại này
-- **Output:** Nút 👍/👎 trên từng section (explicit rating)
-
-*Rationale: Tường minh vì user cần deliberate action — AI không tự đoán ý định từ behavior.*
-
-### User → System (Implicit)
-
-Hệ thống **quan sát hành vi** của user mà không ngắt:
-
-- User **approve outline ngay không sửa** → signal: AI hiểu đúng topic, không cần hỏi thêm ở lần sau
-- User **spend >3 min ở Interrupt 1** → signal: uncertain về sub-queries, có thể cần thêm gợi ý
-- User **rescue nhiều claims** từ "Removed" → signal: AI search sources quá hẹp, cần mở rộng database
-- User **undo auto-format** → signal: AI dùng sai citation style cho lĩnh vực này
-
-*Rationale: Không làm gián đoạn flow của user. Observe hành vi nhưng không tự coi là ground truth — user undo có thể vì AI sai, hoặc đơn giản là họ đổi ý.*
-
-### System → User (Explicit)
-
-Hệ thống **nói thẳng** cho user biết trạng thái:
-
-- Progress steps: "Bước 2/4: Clustering..." với step indicator rõ ràng
-- Badge "⚠️ 3 citations suspect" trên output panel
-- Warning box: "Citation not found in verified sources. Click to investigate."
-- Confidence bar cho từng claim: 25% / 60% / 95%
-- Confirmation sau fix: "✓ Đã ghi nhớ fix này cho section tiếp theo"
-
-*Rationale: Explicit vì user cần biết trạng thái AI để ra quyết định có informed, không phải đoán.*
-
-### System → User (Implicit)
-
-Hệ thống truyền đạt thông tin **qua thiết kế giao diện**:
-
-- **Color coding:** xanh/vàng/đỏ cho citations theo confidence → user học pattern mà không cần đọc hướng dẫn
-- **Dim** removed claims thay vì xóa hẳn → signal "vẫn có thể rescue, chưa mất hoàn toàn"
-- **"▸ arrow"** trên cluster reason → signal "có thể expand để xem thêm"
-- **Step indicator mờ** cho pending steps → user biết còn bước nữa phía trước
-
-*Rationale: Progressive disclosure — dùng visual cue trước, chỉ interrupt khi user thực sự cần help.*
-
-### Nguyên tắc feedback trong prototype này
-
-1. **Đặt feedback đúng ngữ cảnh** — Rescue button nằm ngay trên claim bị removed, không ở menu khác
-2. **Show benefit của việc feedback** — "AI sẽ ghi nhớ fix này cho section tiếp theo" → user có lý do để feedback
-3. **Đừng ngắt khi không cần thiết** — Implicit signals được observe im lặng, không popup liên tục
-4. **Hành vi ≠ ý định** — User undo ≠ AI sai. Hệ thống ghi nhận nhưng không tự label
-
----
-
-## 7. Bằng chứng và Explainability
-
-Prototype có **ít nhất 2 lớp explainability**:
-
-**Lớp 1 — Interrupt 2: Cluster reasoning**
-
-Khi user click "▸ Xem lý do AI cluster", hệ thống show:
-- Keywords chung giữa các papers trong cluster
-- % overlap với cluster khác
-- Sub-clusters tiềm ẩn bên trong (nếu có)
-- Recommendation của AI về việc có nên split không
-
-Điều này giúp user đưa ra quyết định split/merge dựa trên **data**, không dựa vào cảm giác.
-
-**Lớp 2 — S4: Citation hallucination evidence**
-
-Khi user click vào citation suspect, hệ thống show:
-- Claim AI đang cố prove
-- Paper nào AI "dùng" làm basis cho claim đó
-- Tại sao citation cụ thể không tìm thấy được
-- Gợi ý paper thật có thể thay thế
-
-Điều này giúp user **không chỉ biết citation sai, mà hiểu TẠI SAO nó sai** — từ đó đưa ra quyết định có informed hơn (xóa, thay, hay tự tìm).
-
----
-
-## 8. Điều kiện tối thiểu — Checklist
-
-| Yêu cầu | Trạng thái | Thể hiện ở đâu |
-|---|---|---|
-| ✅ Onboarding lần đầu dùng tính năng | Đạt | Tab 01 — P0 |
-| ✅ Ít nhất 4 kịch bản ngoài onboarding | Đạt | S1, S2, S3, S4, S5 (5 kịch bản) |
-| ✅ Lát cắt xuyên suốt Onboarding → During → After → Feedback | Đạt | Flow 4 request pipeline |
-| ✅ Đủ Act / Ask / Don't Act | Đạt | Bảng agency section 5 |
-| ✅ Ít nhất 1 vòng feedback & recovery hoàn chỉnh | Đạt | S3 rescue loop, S4 hallucination fix |
-| ✅ Đủ 4 loại feedback trong ma trận 2×2 | Đạt | Tab 06 — Feedback 2×2 |
-| ✅ Ít nhất 1 lớp bằng chứng / explainability | Đạt | Cluster reasoning + Citation evidence |
-| ✅ Design rationale đặt cạnh flow | Đạt | Annotation box dưới mỗi screen |
-
----
-
-## 9. Demo Path (5 phút)
-
-| Thời gian | Nội dung | Click path |
-|---|---|---|
-| 0:00–0:30 | Người dùng, vấn đề, lát cắt | Tab 00 — flow map tổng quan |
-| 0:30–1:15 | Onboarding → Plan review | Tab 01 → Tab 02: click "✏️ Sửa" query #3, edit, save, approve |
-| 1:15–2:15 | Outline + Explainability | Tab 03: click "▸ Xem lý do cluster 3" → yellow warning → click "✂️ Split" → approve |
-| 2:15–3:45 | Failure & Recovery (×2) | Tab 04: rescue claim "O(n√n)" → Tab 05: click [Lin et al., 2021] → replace với Child et al. |
-| 3:45–4:45 | Feedback 2×2 | Tab 06: walk through 4 ô, highlight implicit system: color coding = progressive disclosure |
-| 4:45–5:00 | Quyết định thiết kế quan trọng nhất | "Interrupt 3 không được là informational-only vì AI có thể xóa sai claim quan trọng" |
-
----
-
-## 10. Quyết định thiết kế quan trọng nhất và rủi ro còn lại
-
-### Quyết định quan trọng nhất
-
-**Đổi Interrupt 3 từ "informational only" sang "có rescue loop"**
-
-Thiết kế gốc của team là Interrupt 3 chỉ hiện thống kê (38/12/7) như một dashboard — user xem rồi nhấn Continue. Nhưng điều này tạo ra vấn đề: nếu AI xóa sai một claim quan trọng, user không có cách nào lấy lại.
-
-Chi phí của lỗi này cực cao trong ngữ cảnh nghiên cứu — một claim bị thiếu có thể làm yếu toàn bộ argument của paper.
-
-Quyết định: **Bất kỳ claim nào trong "Removed" đều phải cho user khả năng rescue**, với evidence loop hoàn chỉnh (user provide source → AI verify → move sang needs-review → confirm). Điều này tăng 1 interaction step nhưng giảm đáng kể risk của false negative.
-
-### Rủi ro còn lại
-
-1. **Citation confidence score không phải ground truth** — Confidence 25% không đồng nghĩa với "sai 75% khả năng". User có thể overtrust hoặc undertrust màu đỏ
-2. **Implicit user feedback dễ misinterpret** — User approve outline nhanh có thể vì họ hiểu rõ, hoặc đơn giản là vội. Hệ thống không phân biệt được hai trường hợp
-3. **Pipeline bị interrupted ở giữa** — Nếu user rời session sau Interrupt 2 và quay lại sau, thread_id có thể expire. Chưa có thiết kế cho trường hợp resume từ mid-pipeline
-
----
-
+| Có onboarding | ✅ Kịch bản 1 |
+| ≥4 kịch bản ngoài onboarding | ✅ Kịch bản 2, 3, 4, 5 |
+| Đủ slice Onboarding→During→After→Feedback | ✅ Onboarding (1) → During (2, 3) → After (xem lại tab Đã xóa) → Feedback&Recovery (5) |
+| Đủ Act/Ask/Don't Act | ✅ Có cả 3 mức, với lý giải risk/recoverability |
+| ≥1 vòng feedback & recovery hoàn chỉnh | ✅ Kịch bản 5 |
+| Đủ 4 loại trong feedback matrix | ✅ Mục 5 |
+| ≥1 lớp evidence/explainability | ✅ Mục 6 |
+| Rationale đi kèm flow | ✅ Mục 7 |

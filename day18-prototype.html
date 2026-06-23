@@ -2,813 +2,381 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Literature Review — Day 18 Prototype</title>
+<title>ClaimVerifier — Prototype (Day 18 Lab)</title>
 <style>
-  :root {
-    --blue: #2563eb; --blue-light: #dbeafe; --blue-mid: #93c5fd;
-    --green: #059669; --green-light: #dcfce7; --green-mid: #86efac;
-    --yellow: #d97706; --yellow-light: #fef3c7; --yellow-mid: #fbbf24;
-    --red: #dc2626; --red-light: #fee2e2; --red-mid: #fca5a5;
-    --gray-50: #f9fafb; --gray-100: #f3f4f6; --gray-200: #e5e7eb;
-    --gray-400: #9ca3af; --gray-600: #4b5563; --gray-800: #1f2937;
-    --purple: #7c3aed; --purple-light: #ede9fe;
-    --font: system-ui, -apple-system, sans-serif;
+  :root{
+    --bg:#f5f6fa; --card:#fff; --ink:#1f2430; --muted:#6b7280;
+    --green:#16a34a; --green-bg:#e8f7ee;
+    --orange:#d97706; --orange-bg:#fff4e0;
+    --red:#dc2626; --red-bg:#fdeaea;
+    --gray:#6b7280; --gray-bg:#f1f0e8;
+    --priority:#b91c1c; --priority-bg:#fff0f0;
+    --blue:#2563eb; --blue-bg:#eaf1ff;
+    --border:#e5e7eb;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: var(--font); background: #f8fafc; color: var(--gray-800); min-height: 100vh; }
-
-  /* NAV */
-  .nav { background: white; border-bottom: 1px solid var(--gray-200); padding: 0 24px; display: flex; align-items: center; gap: 0; height: 52px; position: sticky; top: 0; z-index: 100; }
-  .nav-brand { font-size: 14px; font-weight: 600; color: var(--blue); margin-right: 20px; white-space: nowrap; }
-  .nav-tabs { display: flex; gap: 2px; overflow-x: auto; }
-  .nav-tab { padding: 6px 10px; font-size: 11px; border-radius: 6px; cursor: pointer; border: none; background: none; color: var(--gray-600); white-space: nowrap; transition: all .15s; }
-  .nav-tab:hover { background: var(--gray-100); }
-  .nav-tab.active { background: var(--blue-light); color: var(--blue); font-weight: 500; }
-
-  /* SCREENS */
-  .screen { display: none; max-width: 860px; margin: 0 auto; padding: 28px 20px; }
-  .screen.active { display: block; }
-
-  /* CARDS */
-  .card { background: white; border: 1px solid var(--gray-200); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
-  .card-title { font-size: 14px; font-weight: 600; color: var(--gray-800); margin-bottom: 4px; }
-  .card-sub { font-size: 12px; color: var(--gray-400); margin-bottom: 14px; }
-
-  /* BADGES */
-  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 99px; font-size: 11px; font-weight: 500; }
-  .badge-blue { background: var(--blue-light); color: var(--blue); }
-  .badge-green { background: var(--green-light); color: var(--green); }
-  .badge-yellow { background: var(--yellow-light); color: var(--yellow); }
-  .badge-red { background: var(--red-light); color: var(--red); }
-  .badge-gray { background: var(--gray-100); color: var(--gray-600); }
-  .badge-purple { background: var(--purple-light); color: var(--purple); }
-
-  /* BUTTONS */
-  .btn { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all .15s; }
-  .btn-primary { background: var(--blue); color: white; }
-  .btn-primary:hover { background: #1d4ed8; }
-  .btn-secondary { background: var(--gray-100); color: var(--gray-800); border: 1px solid var(--gray-200); }
-  .btn-secondary:hover { background: var(--gray-200); }
-  .btn-danger { background: var(--red-light); color: var(--red); border: 1px solid var(--red-mid); }
-  .btn-success { background: var(--green-light); color: var(--green); border: 1px solid var(--green-mid); }
-  .btn-sm { padding: 5px 10px; font-size: 11px; }
-  .btn-row { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
-
-  /* INTERRUPT BANNER */
-  .interrupt-banner { background: var(--yellow-light); border: 2px solid var(--yellow-mid); border-radius: 10px; padding: 14px 16px; margin-bottom: 18px; display: flex; align-items: flex-start; gap: 10px; }
-  .interrupt-icon { font-size: 18px; flex-shrink: 0; }
-  .interrupt-title { font-size: 13px; font-weight: 600; color: var(--yellow); }
-  .interrupt-desc { font-size: 12px; color: #78350f; margin-top: 2px; }
-
-  /* PROGRESS STEPS */
-  .steps { display: flex; align-items: center; gap: 0; margin-bottom: 24px; }
-  .step { display: flex; align-items: center; gap: 6px; }
-  .step-dot { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }
-  .step-dot.done { background: var(--green); color: white; }
-  .step-dot.active { background: var(--blue); color: white; }
-  .step-dot.pending { background: var(--gray-200); color: var(--gray-400); }
-  .step-label { font-size: 11px; color: var(--gray-600); white-space: nowrap; }
-  .step-label.active-label { color: var(--blue); font-weight: 500; }
-  .step-line { flex: 1; height: 2px; background: var(--gray-200); margin: 0 4px; min-width: 20px; }
-  .step-line.done-line { background: var(--green); }
-
-  /* CLAIM CARDS */
-  .claim { border: 1px solid var(--gray-200); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; display: flex; align-items: flex-start; gap: 10px; }
-  .claim.included { border-left: 3px solid var(--green); }
-  .claim.needs-review { border-left: 3px solid var(--yellow); }
-  .claim.removed { border-left: 3px solid var(--red); opacity: .75; }
-  .claim-text { font-size: 12px; color: var(--gray-800); flex: 1; line-height: 1.5; }
-  .claim-source { font-size: 10px; color: var(--blue); margin-top: 3px; }
-  .claim-actions { display: flex; gap: 4px; flex-shrink: 0; }
-
-  /* RATIONALE BOX */
-  .rationale { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 12px 14px; margin-top: 14px; }
-  .rationale-title { font-size: 11px; font-weight: 600; color: #0369a1; margin-bottom: 8px; }
-  .rationale-row { display: flex; gap: 8px; margin-bottom: 5px; align-items: flex-start; }
-  .rationale-q { font-size: 10px; color: #0369a1; font-weight: 500; min-width: 120px; }
-  .rationale-a { font-size: 10px; color: var(--gray-800); line-height: 1.5; }
-
-  /* FEEDBACK MATRIX */
-  .matrix { display: grid; grid-template-columns: 90px 1fr 1fr; border: 1px solid var(--gray-200); border-radius: 8px; overflow: hidden; }
-  .matrix-header { background: var(--gray-100); padding: 8px 10px; font-size: 10px; font-weight: 600; color: var(--gray-600); }
-  .matrix-cell { padding: 10px; border-top: 1px solid var(--gray-200); border-left: 1px solid var(--gray-200); font-size: 11px; color: var(--gray-800); line-height: 1.5; }
-  .matrix-label { padding: 10px; border-top: 1px solid var(--gray-200); font-size: 11px; font-weight: 600; color: var(--gray-600); background: var(--gray-50); }
-
-  /* INLINE TAGS */
-  .tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 500; margin-right: 4px; }
-  .tag-act { background: #dcfce7; color: #166534; }
-  .tag-ask { background: #fef3c7; color: #92400e; }
-  .tag-dont { background: #fee2e2; color: #991b1b; }
-
-  /* MISC */
-  .divider { border: none; border-top: 1px solid var(--gray-200); margin: 16px 0; }
-  .page-title { font-size: 18px; font-weight: 600; color: var(--gray-800); margin-bottom: 4px; }
-  .page-sub { font-size: 12px; color: var(--gray-400); margin-bottom: 20px; }
-  .info-box { background: var(--blue-light); border: 1px solid var(--blue-mid); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #1e40af; margin-bottom: 14px; line-height: 1.6; }
-  .warn-box { background: var(--yellow-light); border: 1px solid var(--yellow-mid); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #78350f; margin-bottom: 14px; line-height: 1.6; }
-  .error-box { background: var(--red-light); border: 1px solid var(--red-mid); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #991b1b; margin-bottom: 14px; line-height: 1.6; }
-  .success-box { background: var(--green-light); border: 1px solid var(--green-mid); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #166534; margin-bottom: 14px; line-height: 1.6; }
-  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .input-field { width: 100%; padding: 8px 12px; border: 1px solid var(--gray-200); border-radius: 8px; font-size: 13px; font-family: var(--font); resize: vertical; }
-  .input-field:focus { outline: none; border-color: var(--blue); }
-  label { font-size: 12px; font-weight: 500; color: var(--gray-600); display: block; margin-bottom: 4px; }
-
-  /* ANNOTATION */
-  .annotation { position: relative; border: 1px dashed var(--blue-mid); border-radius: 8px; padding: 12px; margin-top: 10px; background: #fafcff; }
-  .annotation::before { content: "📌 Design rationale"; position: absolute; top: -10px; left: 10px; background: white; padding: 0 6px; font-size: 10px; font-weight: 600; color: var(--blue); }
-
-  /* CITATION HIGHLIGHT */
-  .citation-suspect { background: #fef9c3; border-bottom: 2px solid #eab308; cursor: pointer; position: relative; }
-  .citation-verified { background: var(--green-light); border-bottom: 2px solid var(--green); }
-  .citation-fake { background: var(--red-light); border-bottom: 2px solid var(--red); }
-
-  /* Confidence bar */
-  .conf-bar-wrap { background: var(--gray-200); border-radius: 99px; height: 6px; flex: 1; overflow: hidden; }
-  .conf-bar { height: 100%; border-radius: 99px; }
+  *{box-sizing:border-box;}
+  body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);margin:0;}
+  .app{max-width:920px;margin:0 auto;padding:24px 20px 80px;}
+  h1{font-size:20px;margin:0 0 4px;}
+  .subtitle{color:var(--muted);font-size:13px;margin:0 0 20px;}
+  nav{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px;position:sticky;top:0;background:var(--bg);padding:10px 0;z-index:5;}
+  nav button{border:1px solid var(--border);background:var(--card);padding:8px 12px;border-radius:8px;font-size:12.5px;cursor:pointer;color:var(--ink);}
+  nav button.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .screen{display:none;}
+  .screen.active{display:block;animation:fade .25s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:16px;}
+  .panel h2{font-size:15px;margin:0 0 6px;}
+  .panel p.desc{color:var(--muted);font-size:13px;margin:0 0 14px;line-height:1.5;}
+  .header-note{background:var(--blue-bg);border:1px solid #cfe0ff;border-radius:10px;padding:10px 14px;font-size:13px;color:#1d4ed8;margin-bottom:16px;}
+  .progress-wrap{margin-bottom:6px;}
+  .progress-track{background:#e8eaf0;border-radius:8px;height:8px;overflow:hidden;margin-top:8px;}
+  .progress-fill{background:var(--blue);height:8px;width:0%;transition:width .4s ease;}
+  .progress-label{font-size:13px;color:var(--muted);}
+  .claim-list{display:flex;flex-direction:column;gap:10px;}
+  .claim-card{border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:#fafbfc;}
+  .claim-text{font-size:13.5px;margin:0 0 8px;line-height:1.5;}
+  .badge{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:20px;margin-right:6px;}
+  .badge.green{background:var(--green-bg);color:var(--green);}
+  .badge.orange{background:var(--orange-bg);color:var(--orange);}
+  .badge.red{background:var(--red-bg);color:var(--red);}
+  .badge.gray{background:var(--gray-bg);color:#7a6f3b;}
+  .badge.priority{background:var(--priority-bg);color:var(--priority);}
+  .src-link{font-size:12px;color:var(--blue);cursor:pointer;text-decoration:underline;background:none;border:none;padding:0;}
+  .row-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+  .btn{border:1px solid var(--border);background:#fff;padding:6px 12px;border-radius:7px;font-size:12.5px;cursor:pointer;}
+  .btn:hover{background:#f3f4f6;}
+  .btn.primary{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .btn.danger{color:var(--red);border-color:#f5c2c2;}
+  .btn.success{color:var(--green);border-color:#bfe6cc;}
+  .btn.small{font-size:11.5px;padding:4px 9px;}
+  .evidence-box{display:none;margin-top:10px;background:#fff;border:1px dashed var(--border);border-radius:8px;padding:10px 12px;font-size:12.5px;color:#374151;}
+  .evidence-box.open{display:block;}
+  .evidence-box .lbl{font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.03em;margin-bottom:3px;}
+  .resolved-tag{font-size:12px;color:var(--muted);font-style:italic;}
+  .summary-line{font-size:12.5px;color:var(--muted);margin-top:14px;border-top:1px dashed var(--border);padding-top:10px;}
+  .compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;}
+  .compare-box{background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:12.5px;}
+  .compare-box .lbl{font-weight:600;font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:4px;}
+  textarea.edit-box{width:100%;min-height:60px;border:1px solid var(--border);border-radius:8px;padding:8px;font-size:13px;margin-top:8px;display:none;font-family:inherit;}
+  textarea.edit-box.open{display:block;}
+  .deleted-line{font-size:13px;color:var(--muted);background:#f7f7f7;border:1px dashed var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;}
+  .deleted-detail{display:none;margin-top:8px;font-size:12.5px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px;}
+  .deleted-detail.open{display:block;}
+  .tab-bar{display:flex;gap:6px;margin-bottom:12px;}
+  .tab-bar button{border:none;background:none;font-size:12.5px;color:var(--muted);padding:6px 4px;border-bottom:2px solid transparent;cursor:pointer;}
+  .tab-bar button.active{color:var(--ink);border-bottom-color:var(--ink);font-weight:600;}
+  .tabpane{display:none;}
+  .tabpane.active{display:block;}
+  .banner{background:var(--orange-bg);border:1px solid #f3d8a6;color:#92400e;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none;}
+  .banner.show{display:block;}
+  .toggle-line{font-size:12px;color:var(--muted);margin-bottom:10px;}
+  .feedback-box{display:none;margin-top:8px;}
+  .feedback-box.open{display:block;}
+  .input-reason{width:100%;border:1px solid var(--border);border-radius:7px;padding:7px 9px;font-size:12.5px;margin-top:6px;font-family:inherit;}
+  .note-learn{display:none;background:var(--blue-bg);border:1px solid #cfe0ff;color:#1d4ed8;border-radius:8px;padding:9px 12px;font-size:12.5px;margin-top:10px;}
+  .note-learn.show{display:block;}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:all .3s ease;pointer-events:none;z-index:50;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-bottom:16px;}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+  .strike{text-decoration:line-through;opacity:.55;}
+  footer.notebox{font-size:12px;color:var(--muted);border-top:1px solid var(--border);padding-top:14px;margin-top:24px;}
 </style>
 </head>
 <body>
+<div class="app">
+  <h1>ClaimVerifier — Prototype mô phỏng (clickable)</h1>
+  <p class="subtitle">Feature slice: Claim Verification & Routing (Step ⑧⑨) — Academic Research Assistant. Đây là mô phỏng tương tác (không gọi API thật) để minh hoạ trạng thái AI, lựa chọn user, và đường chuyển — đi kèm file báo cáo .md.</p>
 
-<div class="nav">
-  <div class="nav-brand">📄 AI LitReview</div>
-  <div class="nav-tabs">
-    <button class="nav-tab active" onclick="show('p00')">00 Flow map</button>
-    <button class="nav-tab" onclick="show('p01')">01 Onboarding</button>
-    <button class="nav-tab" onclick="show('p02')">02 R1 + Int.1</button>
-    <button class="nav-tab" onclick="show('p03')">03 R2 + Int.2</button>
-    <button class="nav-tab" onclick="show('p04')">04 R3 + Int.3</button>
-    <button class="nav-tab" onclick="show('p05')">05 Failure & Recovery</button>
-    <button class="nav-tab" onclick="show('p06')">06 Feedback 2×2</button>
-    <button class="nav-tab" onclick="show('p07')">07 Demo path</button>
-  </div>
-</div>
+  <nav id="nav"></nav>
 
-<!-- ========== PAGE 00: FLOW MAP ========== -->
-<div class="screen active" id="p00">
-  <div class="page-title">00 — Flow map & feature scope</div>
-  <div class="page-sub">Tổng quan slice: User-steered Literature Review với 4 requests + 3 human-in-the-loop interrupts</div>
-  <div class="card">
-    <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px;">
-      <span class="badge badge-blue">Slice: AI generates literature review</span>
-      <span class="badge badge-gray">User: researchers + thesis students</span>
-      <span class="badge badge-green">4 requests · 3 interrupts</span>
-    </div>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
-      <div class="info-box">
-        <strong>AI có thể làm:</strong><br>
-        Tạo sub-queries từ research topic · Tìm và cluster papers · Tóm tắt và verify claims · Generate full literature review · Format citations BibTeX
+  <!-- SCREEN 1: ONBOARDING -->
+  <div class="screen active" data-screen="1">
+    <div class="panel">
+      <h2>Kịch bản 1 — Onboarding (P0)</h2>
+      <p class="desc">Lần đầu mở màn hình sau khi AI verify xong 1 theme. Bấm "Bắt đầu verify" để xem AI xử lý, sau đó tương tác với từng claim.</p>
+      <div id="s1-pre">
+        <button class="btn primary" id="s1-start">▶ Bắt đầu verify (mô phỏng)</button>
       </div>
-      <div class="warn-box">
-        <strong>AI không được tự làm:</strong><br>
-        Submit hoặc publish bài · Xóa claim quan trọng không hỏi · Truy cập paper bị paywall · Đảm bảo 100% citation chính xác
-      </div>
-    </div>
-    <!-- Mini flow -->
-    <div style="display:flex; flex-direction:column; gap:6px;">
-      <div style="display:flex; align-items:center; gap:8px;">
-        <div style="background:var(--green-light); border:1px solid var(--green-mid); border-radius:8px; padding:6px 12px; font-size:11px; font-weight:500; color:var(--green); min-width:160px;">P0 — Onboarding</div>
-        <span style="font-size:11px; color:var(--gray-400);">Explain 4 bước · limits · data cần · cách bắt đầu</span>
-      </div>
-      <div style="margin-left:16px; color:var(--gray-400); font-size:12px;">↓</div>
-      <div style="display:flex; align-items:center; gap:8px;">
-        <div style="background:var(--blue-light); border:1px solid var(--blue-mid); border-radius:8px; padding:6px 12px; font-size:11px; font-weight:500; color:var(--blue); min-width:160px;">R1 → ⏸ Interrupt 1</div>
-        <span style="font-size:11px; color:var(--gray-400);">AI tạo plan · <span class="tag tag-ask">ASK</span> User review + edit sub-queries</span>
-        <span class="badge badge-red" style="font-size:10px;">S1: plan sai góc</span>
-      </div>
-      <div style="margin-left:16px; color:var(--gray-400); font-size:12px;">↓ approve</div>
-      <div style="display:flex; align-items:center; gap:8px;">
-        <div style="background:var(--blue-light); border:1px solid var(--blue-mid); border-radius:8px; padding:6px 12px; font-size:11px; font-weight:500; color:var(--blue); min-width:160px;">R2 → ⏸ Interrupt 2</div>
-        <span style="font-size:11px; color:var(--gray-400);">AI cluster topics · <span class="tag tag-ask">ASK</span> User approve outline + explainability</span>
-        <span class="badge badge-red" style="font-size:10px;">S2: cluster sai</span>
-      </div>
-      <div style="margin-left:16px; color:var(--gray-400); font-size:12px;">↓ approve</div>
-      <div style="display:flex; align-items:center; gap:8px;">
-        <div style="background:var(--blue-light); border:1px solid var(--blue-mid); border-radius:8px; padding:6px 12px; font-size:11px; font-weight:500; color:var(--blue); min-width:160px;">R3 → ⏸ Interrupt 3</div>
-        <span style="font-size:11px; color:var(--gray-400);">AI route 57 claims · User rescue từ "removed"</span>
-        <span class="badge badge-red" style="font-size:10px;">S3: claim bị xóa sai</span>
-      </div>
-      <div style="margin-left:16px; color:var(--gray-400); font-size:12px;">↓ confirm</div>
-      <div style="display:flex; align-items:center; gap:8px;">
-        <div style="background:var(--green-light); border:1px solid var(--green-mid); border-radius:8px; padding:6px 12px; font-size:11px; font-weight:500; color:var(--green); min-width:160px;">R4 → Output</div>
-        <span style="font-size:11px; color:var(--gray-400);">Full review · <span class="tag tag-act">ACT</span> auto-format refs · Edit LaTeX · Export</span>
-        <span class="badge badge-red" style="font-size:10px;">S4: citation hallucinate</span>
-      </div>
-    </div>
-  </div>
-  <div class="card">
-    <div class="card-title">Scenarios coverage</div>
-    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:10px;">
-      <div style="background:var(--green-light); border-radius:8px; padding:10px;"><div style="font-size:11px; font-weight:600; color:var(--green); margin-bottom:4px;">✓ Onboarding</div><div style="font-size:10px; color:var(--gray-600);">P0 — lần đầu dùng tool</div></div>
-      <div style="background:var(--blue-light); border-radius:8px; padding:10px;"><div style="font-size:11px; font-weight:600; color:var(--blue); margin-bottom:4px;">✓ During (×2)</div><div style="font-size:10px; color:var(--gray-600);">S1 Int.1 · S2 Int.2</div></div>
-      <div style="background:var(--red-light); border-radius:8px; padding:10px;"><div style="font-size:11px; font-weight:600; color:var(--red); margin-bottom:4px;">✓ Failure/Recovery (×2)</div><div style="font-size:10px; color:var(--gray-600);">S3 claims rescued · S4 citation hallucinate</div></div>
-      <div style="background:var(--yellow-light); border-radius:8px; padding:10px;"><div style="font-size:11px; font-weight:600; color:var(--yellow); margin-bottom:4px;">✓ Act/Ask/Don't Act</div><div style="font-size:10px; color:var(--gray-600);">S5 auto-format · interrupts</div></div>
-      <div style="background:var(--purple-light); border-radius:8px; padding:10px;"><div style="font-size:11px; font-weight:600; color:var(--purple); margin-bottom:4px;">✓ Feedback 2×2</div><div style="font-size:10px; color:var(--gray-600);">Explicit + Implicit × User + System</div></div>
-      <div style="background:var(--gray-100); border-radius:8px; padding:10px;"><div style="font-size:11px; font-weight:600; color:var(--gray-600); margin-bottom:4px;">✓ Explainability</div><div style="font-size:10px; color:var(--gray-600);">Int.2 clustering reason · S4 citation source</div></div>
-    </div>
-  </div>
-</div>
-
-<!-- ========== PAGE 01: ONBOARDING ========== -->
-<div class="screen" id="p01">
-  <div class="page-title">01 — Onboarding (P0)</div>
-  <div class="page-sub">Lần đầu user tiếp cận tính năng AI Literature Review</div>
-
-  <div class="card">
-    <div style="text-align:center; padding:8px 0 16px;">
-      <div style="font-size:28px; margin-bottom:8px;">📚</div>
-      <div style="font-size:16px; font-weight:600; margin-bottom:4px;">AI Literature Review</div>
-      <div style="font-size:12px; color:var(--gray-400); max-width:380px; margin:0 auto;">Hệ thống sẽ cùng bạn xây dựng literature review theo 4 bước, với 3 điểm dừng để bạn kiểm tra và định hướng lại trước khi AI tiếp tục.</div>
-    </div>
-    <div class="divider"></div>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
-      <div>
-        <div style="font-size:11px; font-weight:600; color:var(--green); margin-bottom:8px;">✓ AI có thể hỗ trợ</div>
-        <ul style="font-size:11px; color:var(--gray-600); line-height:2; padding-left:16px;">
-          <li>Tạo search queries từ topic của bạn</li>
-          <li>Tìm và filter papers liên quan</li>
-          <li>Summarize + verify claims từ papers</li>
-          <li>Generate draft literature review</li>
-          <li>Format citations (APA / IEEE / BibTeX)</li>
-        </ul>
-      </div>
-      <div>
-        <div style="font-size:11px; font-weight:600; color:var(--red); margin-bottom:8px;">✗ AI không tự làm</div>
-        <ul style="font-size:11px; color:var(--gray-600); line-height:2; padding-left:16px;">
-          <li>Submit / publish bài của bạn</li>
-          <li>Truy cập paper bị paywall</li>
-          <li>Đảm bảo 100% citation chính xác</li>
-          <li>Xóa claim mà không hỏi bạn</li>
-          <li>Quyết định final thay bạn</li>
-        </ul>
-      </div>
-    </div>
-    <div class="info-box">
-      ⚠️ <strong>Lưu ý về độ chính xác:</strong> AI có thể tạo citation không tồn tại (hallucination). Hệ thống sẽ đánh dấu các claim chưa được verify — bạn nên kiểm tra những claim này trước khi dùng.
-    </div>
-    <div style="background:var(--gray-50); border-radius:8px; padding:12px; margin-bottom:14px;">
-      <div style="font-size:11px; font-weight:600; color:var(--gray-600); margin-bottom:8px;">4 bước trong quy trình:</div>
-      <div class="steps">
-        <div class="step"><div class="step-dot active">1</div><div class="step-label active-label">Plan</div></div>
-        <div class="step-line"></div>
-        <div class="step"><div class="step-dot pending">2</div><div class="step-label">Outline</div></div>
-        <div class="step-line"></div>
-        <div class="step"><div class="step-dot pending">3</div><div class="step-label">Claims</div></div>
-        <div class="step-line"></div>
-        <div class="step"><div class="step-dot pending">4</div><div class="step-label">Generate</div></div>
-      </div>
-    </div>
-    <div style="display:flex; gap:8px; align-items:center; margin-bottom:14px;">
-      <input class="input-field" placeholder="Nhập research topic của bạn..." style="flex:1;">
-      <button class="btn btn-primary" onclick="show('p02')">Bắt đầu →</button>
-    </div>
-    <div style="font-size:11px; color:var(--gray-400);">Bạn có thể dừng và chỉnh hướng ở bất kỳ bước nào. Dữ liệu sẽ được lưu tự động.</div>
-  </div>
-  <div class="annotation">
-    <div class="rationale-title">Design rationale — Onboarding</div>
-    <div class="rationale-row"><span class="rationale-q">AI biết gì?</span><span class="rationale-a">Chưa biết gì về user, topic, hoặc scope nghiên cứu</span></div>
-    <div class="rationale-row"><span class="rationale-q">AI không biết gì?</span><span class="rationale-a">Research angle của user, loại output họ cần, nguồn họ muốn ưu tiên</span></div>
-    <div class="rationale-row"><span class="rationale-q">Agency?</span><span class="rationale-a"><span class="tag tag-dont">Don't Act</span> — AI chưa được phép làm gì cho đến khi user input topic</span></div>
-    <div class="rationale-row"><span class="rationale-q">Expectation setting</span><span class="rationale-a">Show rõ AI làm được gì / không làm gì + cảnh báo citation risk TRƯỚC khi user bắt đầu</span></div>
-  </div>
-</div>
-
-<!-- ========== PAGE 02: R1 + INTERRUPT 1 ========== -->
-<div class="screen" id="p02">
-  <div class="page-title">02 — R1 + Interrupt 1: Plan Review</div>
-  <div class="page-sub">S1 — AI tạo plan, user review và có thể edit sub-queries</div>
-
-  <div class="steps" style="margin-bottom:18px;">
-    <div class="step"><div class="step-dot done">✓</div><div class="step-label">Onboarding</div></div>
-    <div class="step-line done-line"></div>
-    <div class="step"><div class="step-dot active">2</div><div class="step-label active-label">Plan</div></div>
-    <div class="step-line"></div>
-    <div class="step"><div class="step-dot pending">3</div><div class="step-label">Outline</div></div>
-    <div class="step-line"></div>
-    <div class="step"><div class="step-dot pending">4</div><div class="step-label">Generate</div></div>
-  </div>
-
-  <div class="interrupt-banner">
-    <div class="interrupt-icon">⏸</div>
-    <div>
-      <div class="interrupt-title">Interrupt 1 — Plan Review</div>
-      <div class="interrupt-desc">AI đã tạo plan gồm 5 sub-queries và 3 nguồn tìm paper. Vui lòng kiểm tra trước khi AI bắt đầu fetch papers. Bạn có thể sửa bất kỳ sub-query nào.</div>
-    </div>
-  </div>
-
-  <!-- SCENARIO: Normal flow -->
-  <div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-      <div class="card-title">Topic: "Efficient Transformer Architectures in NLP"</div>
-      <span class="badge badge-blue">AI generated</span>
-    </div>
-    <div style="font-size:12px; color:var(--gray-600); margin-bottom:10px; font-weight:500;">5 sub-queries AI đề xuất:</div>
-    <div id="queries">
-      <div class="claim" style="border-left:3px solid var(--blue);">
-        <div style="flex:1;"><div class="claim-text">1. "sparse attention mechanisms transformer efficiency 2020-2024"</div></div>
-        <button class="btn btn-secondary btn-sm" onclick="editQuery(this)">✏️ Sửa</button>
-      </div>
-      <div class="claim" style="border-left:3px solid var(--blue);">
-        <div style="flex:1;"><div class="claim-text">2. "linear transformer approximation self-attention"</div></div>
-        <button class="btn btn-secondary btn-sm" onclick="editQuery(this)">✏️ Sửa</button>
-      </div>
-      <div class="claim" style="border-left:3px solid var(--yellow);" id="q3">
-        <div style="flex:1;"><div class="claim-text" id="q3-text">3. "transformer NLP applications general survey"</div><div style="font-size:10px; color:var(--yellow); margin-top:3px;">⚠️ Query này quá rộng — có thể không capture góc "efficiency" của bạn</div></div>
-        <button class="btn btn-secondary btn-sm" onclick="showEditPanel()">✏️ Sửa</button>
-      </div>
-      <div class="claim" style="border-left:3px solid var(--blue);">
-        <div style="flex:1;"><div class="claim-text">4. "memory efficient transformers long sequence modeling"</div></div>
-        <button class="btn btn-secondary btn-sm" onclick="editQuery(this)">✏️ Sửa</button>
-      </div>
-      <div class="claim" style="border-left:3px solid var(--blue);">
-        <div style="flex:1;"><div class="claim-text">5. "knowledge distillation transformer compression inference"</div></div>
-        <button class="btn btn-secondary btn-sm" onclick="editQuery(this)">✏️ Sửa</button>
-      </div>
-    </div>
-
-    <!-- S1: Edit panel (hidden by default) -->
-    <div id="edit-panel" style="display:none; background:var(--yellow-light); border:1px solid var(--yellow-mid); border-radius:8px; padding:12px; margin-top:10px;">
-      <div style="font-size:11px; font-weight:600; color:var(--yellow); margin-bottom:8px;">✏️ Sửa sub-query #3</div>
-      <input class="input-field" id="new-query" value="transformer NLP applications general survey" style="margin-bottom:8px;">
-      <div style="font-size:10px; color:var(--gray-400); margin-bottom:8px;">💡 Gợi ý: thêm "efficiency" hoặc "computational cost" để narrow scope</div>
-      <div class="btn-row" style="margin-top:8px;">
-        <button class="btn btn-primary btn-sm" onclick="saveQuery()">Lưu thay đổi</button>
-        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('edit-panel').style.display='none'">Huỷ</button>
-      </div>
-    </div>
-
-    <div class="divider"></div>
-    <div style="font-size:12px; font-weight:500; color:var(--gray-600); margin-bottom:8px;">Nguồn tìm paper:</div>
-    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-      <span class="badge badge-green">✓ Semantic Scholar</span>
-      <span class="badge badge-green">✓ Arxiv (cs.CL, cs.LG)</span>
-      <span class="badge badge-gray">○ ACL Anthology (optional)</span>
-    </div>
-    <div class="btn-row">
-      <button class="btn btn-primary" onclick="show('p03')">✓ Approve plan — tiếp tục</button>
-      <button class="btn btn-secondary" onclick="showEditPanel()">✏️ Sửa sub-query #3</button>
-      <button class="btn btn-secondary">+ Thêm sub-query</button>
-    </div>
-  </div>
-
-  <div class="annotation">
-    <div class="rationale-title">Design rationale — Interrupt 1</div>
-    <div class="rationale-row"><span class="rationale-q">AI biết gì?</span><span class="rationale-a">Research topic từ user input. Không biết angle cụ thể (efficiency vs applications vs survey)</span></div>
-    <div class="rationale-row"><span class="rationale-q">AI đang assume gì?</span><span class="rationale-a">Query #3 assume user muốn general survey — nhưng user có thể chỉ muốn efficiency papers</span></div>
-    <div class="rationale-row"><span class="rationale-q">Điều gì có thể sai?</span><span class="rationale-a">Sub-query quá rộng → AI fetch sai papers → toàn bộ pipeline đi sai hướng từ đầu</span></div>
-    <div class="rationale-row"><span class="rationale-q">Hậu quả nếu sai?</span><span class="rationale-a">Rất đắt — phải restart từ đầu, mất paper results đã fetch</span></div>
-    <div class="rationale-row"><span class="rationale-q">Agency?</span><span class="rationale-a"><span class="tag tag-ask">ASK</span> — bắt buộc phải review trước khi fetch papers. Chi phí khi sai quá cao</span></div>
-    <div class="rationale-row"><span class="rationale-q">Kiểm soát?</span><span class="rationale-a">User có thể edit từng query, thêm query mới, và chọn/bỏ chọn nguồn paper</span></div>
-  </div>
-</div>
-
-<!-- ========== PAGE 03: R2 + INTERRUPT 2 ========== -->
-<div class="screen" id="p03">
-  <div class="page-title">03 — R2 + Interrupt 2: Outline Approval</div>
-  <div class="page-sub">S2 — AI cluster topics, user review + explainability</div>
-
-  <div class="steps" style="margin-bottom:18px;">
-    <div class="step"><div class="step-dot done">✓</div><div class="step-label">Onboarding</div></div>
-    <div class="step-line done-line"></div>
-    <div class="step"><div class="step-dot done">✓</div><div class="step-label">Plan</div></div>
-    <div class="step-line done-line"></div>
-    <div class="step"><div class="step-dot active">3</div><div class="step-label active-label">Outline</div></div>
-    <div class="step-line"></div>
-    <div class="step"><div class="step-dot pending">4</div><div class="step-label">Generate</div></div>
-  </div>
-
-  <div class="success-box">✓ Đã fetch 847 papers từ 2 nguồn. AI đã read abstracts và cluster thành 4 sections.</div>
-
-  <div class="interrupt-banner">
-    <div class="interrupt-icon">⏸</div>
-    <div>
-      <div class="interrupt-title">Interrupt 2 — Outline Approval</div>
-      <div class="interrupt-desc">AI đã tạo outline với 4 sections. Bạn có thể xem lý do clustering, reorder, merge hoặc split sections trước khi AI đi tiếp.</div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-      <div class="card-title">Outline đề xuất (4 sections)</div>
-      <span class="badge badge-gray">847 papers → 4 clusters</span>
-    </div>
-
-    <div class="claim included">
-      <div style="flex:1;">
-        <div class="claim-text"><strong>1. Sparse Attention Mechanisms</strong></div>
-        <div style="font-size:10px; color:var(--gray-400); margin-top:2px;">23 papers · "longformer, bigbird, sparse transformer, routing"</div>
-        <div style="font-size:10px; color:var(--blue); margin-top:3px; cursor:pointer;" onclick="toggleReason('r1')">▸ Xem lý do AI cluster</div>
-        <div id="r1" style="display:none; margin-top:6px; background:var(--blue-light); border-radius:6px; padding:8px; font-size:10px; color:#1e40af; line-height:1.6;">AI grouped these 23 papers bởi vì chúng đều address cùng một mechanism: reducing full O(n²) attention to sparse patterns. Keywords chung: "sparse mask", "local window", "global token". Overlap với cluster 2 (Linear) thấp (&lt;12% shared papers).</div>
-      </div>
-      <div style="display:flex; flex-direction:column; gap:4px;">
-        <button class="btn btn-secondary btn-sm">↑↓ Reorder</button>
-        <button class="btn btn-secondary btn-sm">✂️ Split</button>
-      </div>
-    </div>
-
-    <div class="claim included">
-      <div style="flex:1;">
-        <div class="claim-text"><strong>2. Linear Transformer Approximations</strong></div>
-        <div style="font-size:10px; color:var(--gray-400); margin-top:2px;">18 papers · "linear attention, kernel methods, O(n) complexity"</div>
-        <div style="font-size:10px; color:var(--blue); margin-top:3px; cursor:pointer;" onclick="toggleReason('r2')">▸ Xem lý do AI cluster</div>
-        <div id="r2" style="display:none; margin-top:6px; background:var(--blue-light); border-radius:6px; padding:8px; font-size:10px; color:#1e40af; line-height:1.6;">Papers này đều propose replacing softmax attention với kernel approximations để đạt O(n) complexity. Họ chia sẻ formal notation chung (feature maps, linear complexity proofs).</div>
-      </div>
-      <div style="display:flex; flex-direction:column; gap:4px;">
-        <button class="btn btn-secondary btn-sm">↑↓ Reorder</button>
-        <button class="btn btn-secondary btn-sm">✂️ Split</button>
-      </div>
-    </div>
-
-    <div class="claim needs-review">
-      <div style="flex:1;">
-        <div class="claim-text"><strong>3. Attention + Positional Encoding</strong></div>
-        <div style="font-size:10px; color:var(--yellow); margin-top:2px;">⚠️ 31 papers · Cluster này có thể quá broad — 2 sub-topics khác nhau</div>
-        <div style="font-size:10px; color:var(--blue); margin-top:3px; cursor:pointer;" onclick="toggleReason('r3')">▸ Xem lý do AI cluster (và cảnh báo)</div>
-        <div id="r3" style="display:none; margin-top:6px; background:var(--yellow-light); border-radius:6px; padding:8px; font-size:10px; color:#78350f; line-height:1.6;">AI grouped 31 papers nhưng phát hiện 2 sub-clusters rõ ràng: (a) Rotary/Relative position encoding (17 papers) và (b) Cross-attention efficiency (14 papers). AI gộp lại nhưng recommend Thư xem xét split thành 2 sections riêng.</div>
-      </div>
-      <div style="display:flex; flex-direction:column; gap:4px;">
-        <button class="btn btn-danger btn-sm" onclick="alert('Split thành 2 sections: Positional Encoding + Cross-attention Efficiency')">✂️ Split</button>
-        <button class="btn btn-secondary btn-sm">Giữ nguyên</button>
-      </div>
-    </div>
-
-    <div class="claim included">
-      <div style="flex:1;">
-        <div class="claim-text"><strong>4. Model Compression & Distillation</strong></div>
-        <div style="font-size:10px; color:var(--gray-400); margin-top:2px;">14 papers · "pruning, quantization, knowledge distillation"</div>
-        <div style="font-size:10px; color:var(--blue); margin-top:3px; cursor:pointer;" onclick="toggleReason('r4')">▸ Xem lý do AI cluster</div>
-        <div id="r4" style="display:none; margin-top:6px; background:var(--blue-light); border-radius:6px; padding:8px; font-size:10px; color:#1e40af; line-height:1.6;">Papers này đều focus vào post-training efficiency methods, distinct từ architecture-level efficiency của clusters 1-3.</div>
-      </div>
-      <div style="display:flex; flex-direction:column; gap:4px;">
-        <button class="btn btn-secondary btn-sm">↑↓ Reorder</button>
-        <button class="btn btn-secondary btn-sm">🔗 Merge</button>
-      </div>
-    </div>
-
-    <div class="btn-row">
-      <button class="btn btn-primary" onclick="show('p04')">✓ Approve outline — tiếp tục</button>
-      <button class="btn btn-secondary">+ Thêm section thủ công</button>
-    </div>
-  </div>
-
-  <div class="annotation">
-    <div class="rationale-title">Design rationale — Interrupt 2 (Explainability)</div>
-    <div class="rationale-row"><span class="rationale-q">Explainability</span><span class="rationale-a">Mỗi cluster có nút "Xem lý do AI cluster" → show keywords chung, % overlap. User hiểu WHY, không chỉ thấy WHAT</span></div>
-    <div class="rationale-row"><span class="rationale-q">Điều gì có thể sai?</span><span class="rationale-a">AI gộp 2 sub-topics khác nhau vào 1 section (S2) → review trở nên incoherent</span></div>
-    <div class="rationale-row"><span class="rationale-q">Agency?</span><span class="rationale-a"><span class="tag tag-ask">ASK</span> — AI tự cluster nhưng phải hỏi user approve. Với cluster suspect (cluster 3) AI chủ động flag</span></div>
-    <div class="rationale-row"><span class="rationale-q">Kiểm soát?</span><span class="rationale-a">Reorder · Split · Merge · Thêm section thủ công — user giữ toàn quyền với structure</span></div>
-  </div>
-</div>
-
-<!-- ========== PAGE 04: R3 + INTERRUPT 3 ========== -->
-<div class="screen" id="p04">
-  <div class="page-title">04 — R3 + Interrupt 3: Claims Routing</div>
-  <div class="page-sub">S3 — AI categorize 57 claims, user rescue claims bị removed sai</div>
-
-  <div class="steps" style="margin-bottom:18px;">
-    <div class="step"><div class="step-dot done">✓</div><div class="step-label">Onboarding</div></div>
-    <div class="step-line done-line"></div>
-    <div class="step"><div class="step-dot done">✓</div><div class="step-label">Plan</div></div>
-    <div class="step-line done-line"></div>
-    <div class="step"><div class="step-dot done">✓</div><div class="step-label">Outline</div></div>
-    <div class="step-line done-line"></div>
-    <div class="step"><div class="step-dot active">4</div><div class="step-label active-label">Claims</div></div>
-  </div>
-
-  <div class="interrupt-banner">
-    <div class="interrupt-icon">⏸</div>
-    <div>
-      <div class="interrupt-title">Interrupt 3 — Claims Routing Summary</div>
-      <div class="interrupt-desc">AI đã phân loại 57 claims. Vui lòng kiểm tra "Needs Review" và "Removed" — đặc biệt những claim quan trọng có thể bị loại sai.</div>
-    </div>
-  </div>
-
-  <!-- Summary stats -->
-  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:16px;">
-    <div style="background:var(--green-light); border:1px solid var(--green-mid); border-radius:8px; padding:12px; text-align:center;">
-      <div style="font-size:22px; font-weight:700; color:var(--green);">38</div>
-      <div style="font-size:11px; color:var(--green); font-weight:500;">Included</div>
-      <div style="font-size:10px; color:var(--gray-400);">2+ verified sources</div>
-    </div>
-    <div style="background:var(--yellow-light); border:1px solid var(--yellow-mid); border-radius:8px; padding:12px; text-align:center;">
-      <div style="font-size:22px; font-weight:700; color:var(--yellow);">12</div>
-      <div style="font-size:11px; color:var(--yellow); font-weight:500;">Needs Review</div>
-      <div style="font-size:10px; color:var(--gray-400);">1 source / borderline</div>
-    </div>
-    <div style="background:var(--red-light); border:1px solid var(--red-mid); border-radius:8px; padding:12px; text-align:center;">
-      <div style="font-size:22px; font-weight:700; color:var(--red);">7</div>
-      <div style="font-size:11px; color:var(--red); font-weight:500;">Removed</div>
-      <div style="font-size:10px; color:var(--gray-400);">Không đủ evidence</div>
-    </div>
-  </div>
-
-  <!-- REMOVED section — S3 scenario -->
-  <div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-      <div class="card-title">🔴 Removed claims (7) — Cần xem lại</div>
-      <span class="badge badge-red">Có thể bị loại sai</span>
-    </div>
-    <div class="warn-box">⚠️ Những claim này bị AI loại vì không tìm thấy đủ source trong database. Nhưng nếu bạn có paper cụ thể, bạn có thể rescue chúng.</div>
-
-    <!-- S3 critical claim -->
-    <div class="claim removed" id="claim-sparse">
-      <div style="flex:1;">
-        <div class="claim-text"><strong>★</strong> "Sparse attention reduces memory complexity from O(n²) to O(n√n) for sequences &gt;2048 tokens"</div>
-        <div class="claim-source">AI reason: "Could not find 2+ papers explicitly stating O(n√n) bound with verified proof"</div>
-        <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
-          <div class="conf-bar-wrap" style="max-width:120px;"><div class="conf-bar" style="width:25%; background:var(--red);"></div></div>
-          <span style="font-size:10px; color:var(--red);">Confidence: 25%</span>
+      <div id="s1-progress" style="display:none">
+        <div class="progress-wrap">
+          <div class="progress-label" id="s1-plabel">Đang kiểm tra nguồn cho 12 claims... (0/12)</div>
+          <div class="progress-track"><div class="progress-fill" id="s1-pfill"></div></div>
         </div>
       </div>
-      <div class="claim-actions">
-        <button class="btn btn-success btn-sm" onclick="rescueClaim()">🔄 Rescue</button>
-        <button class="btn btn-secondary btn-sm">✓ OK removed</button>
-      </div>
-    </div>
-
-    <!-- Rescue flow -->
-    <div id="rescue-panel" style="display:none; background:var(--green-light); border:1px solid var(--green-mid); border-radius:8px; padding:12px; margin-top:8px;">
-      <div style="font-size:11px; font-weight:600; color:var(--green); margin-bottom:8px;">🔄 Rescue claim: provide source evidence</div>
-      <input class="input-field" placeholder='DOI hoặc title: "Child et al., 2019 - Generating Long Sequences..."' style="margin-bottom:8px;">
-      <div style="font-size:10px; color:var(--gray-400); margin-bottom:8px;">Sau khi bạn cung cấp source, AI sẽ verify và move claim sang "Needs Review" để confirm lại.</div>
-      <div class="btn-row" style="margin-top:8px;">
-        <button class="btn btn-primary btn-sm" onclick="confirmRescue()">Verify & Rescue</button>
-        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('rescue-panel').style.display='none'">Huỷ</button>
-      </div>
-    </div>
-
-    <div class="claim removed">
-      <div style="flex:1;"><div class="claim-text">"Flash Attention achieves 3x speedup on A100 GPU vs standard attention"</div><div class="claim-source">AI reason: "Benchmark number varies by implementation, no stable citation found"</div></div>
-      <div class="claim-actions"><button class="btn btn-success btn-sm">🔄 Rescue</button><button class="btn btn-secondary btn-sm">✓ OK</button></div>
-    </div>
-
-    <button class="btn btn-secondary" style="font-size:11px; margin-top:8px; width:100%;">Xem 5 removed claims còn lại...</button>
-  </div>
-
-  <!-- Needs review -->
-  <div class="card">
-    <div class="card-title">🟡 Needs Review (12) — Borderline claims</div>
-    <div class="claim needs-review">
-      <div style="flex:1;"><div class="claim-text">"Longformer scales to 4,096 tokens with linear memory usage"</div><div class="claim-source">Source: Beltagy et al. 2020 (1 paper only)</div><div style="display:flex; align-items:center; gap:6px; margin-top:6px;"><div class="conf-bar-wrap" style="max-width:120px;"><div class="conf-bar" style="width:60%; background:var(--yellow);"></div></div><span style="font-size:10px; color:var(--yellow);">Confidence: 60%</span></div></div>
-      <div class="claim-actions"><button class="btn btn-success btn-sm">✓ Include</button><button class="btn btn-danger btn-sm">✗ Remove</button></div>
-    </div>
-    <button class="btn btn-secondary" style="font-size:11px; margin-top:8px; width:100%;">Xem 11 needs-review còn lại...</button>
-  </div>
-
-  <div class="btn-row">
-    <button class="btn btn-primary" onclick="show('p05')">✓ Confirm routing — Generate review</button>
-  </div>
-
-  <div class="annotation">
-    <div class="rationale-title">Design rationale — Interrupt 3 (Claims Routing)</div>
-    <div class="rationale-row"><span class="rationale-q">Tại sao không "informational only"?</span><span class="rationale-a">AI có thể loại sai claim quan trọng. "Informational only" = user mất claim mà không biết. Phải cho rescue.</span></div>
-    <div class="rationale-row"><span class="rationale-q">Agency?</span><span class="rationale-a"><span class="tag tag-act">ACT</span> cho included claims (rủi ro thấp) · <span class="tag tag-ask">ASK</span> cho removed claims (hậu quả lớn nếu xóa sai)</span></div>
-    <div class="rationale-row"><span class="rationale-q">Recovery?</span><span class="rationale-a">User cung cấp source → AI verify → move sang "needs review" → user confirm → included. Full recovery loop.</span></div>
-    <div class="rationale-row"><span class="rationale-q">Implicit feedback?</span><span class="rationale-a">Khi user rescue claim, AI ghi nhận loại source nào bị miss → cải thiện future search</span></div>
-  </div>
-</div>
-
-<!-- ========== PAGE 05: FAILURE & RECOVERY ========== -->
-<div class="screen" id="p05">
-  <div class="page-title">05 — Failure & Recovery</div>
-  <div class="page-sub">S4 — AI citation hallucination trong final output</div>
-
-  <div class="success-box">✓ R4 hoàn thành — AI đã generate full literature review (4 sections, 57 claims, ~3,200 words)</div>
-
-  <!-- S4: Citation hallucination -->
-  <div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-      <div class="card-title">Review output — Section 1: Sparse Attention</div>
-      <div style="display:flex; gap:6px;">
-        <span class="badge badge-green">38 verified</span>
-        <span class="badge badge-yellow">3 suspect</span>
-      </div>
-    </div>
-    <div class="info-box" style="font-size:11px;">💡 Citations được highlight theo confidence: <span style="background:#dcfce7; padding:1px 4px; border-radius:3px;">xanh = verified</span> · <span style="background:#fef9c3; padding:1px 4px; border-radius:3px; border-bottom:2px solid #eab308;">vàng = cần verify</span> · <span style="background:#fee2e2; padding:1px 4px; border-radius:3px; border-bottom:2px solid #dc2626;">đỏ = không tìm thấy source</span></div>
-
-    <div style="background:var(--gray-50); border-radius:8px; padding:14px; font-size:13px; line-height:2; margin-bottom:14px;">
-      Sparse attention mechanisms have emerged as a critical approach to scaling Transformers beyond the limitations imposed by the quadratic complexity of standard self-attention <span class="citation-verified" title="Vaswani et al., 2017 — Verified in Semantic Scholar">[Vaswani et al., 2017]</span>. The Longformer model introduced a combination of local windowed attention and task-motivated global attention, enabling processing of sequences up to 4,096 tokens with linear memory scaling <span class="citation-verified" title="Beltagy et al., 2020 — Verified in Semantic Scholar">[Beltagy et al., 2020]</span>. More recent work has demonstrated that sparse attention patterns can reduce memory complexity to O(n√n) while preserving most of the representational power <span class="citation-suspect" title="⚠️ Lin et al., 2021 — NOT FOUND in verified sources. Click to investigate." onclick="showHallucinationPanel()">[Lin et al., 2021]</span>. BigBird extends this further by combining random, local, and global attention mechanisms <span class="citation-verified" title="Zaheer et al., 2020 — Verified in Semantic Scholar">[Zaheer et al., 2020]</span>.
-    </div>
-
-    <!-- Hallucination discovery panel -->
-    <div id="hallucination-panel" style="display:none;">
-      <div class="error-box">
-        <strong>⚠️ Citation suspect: Lin et al., 2021</strong><br>
-        AI không tìm thấy paper này trong bất kỳ nguồn nào đã fetch (Semantic Scholar, Arxiv cs.CL). Paper có thể không tồn tại, hoặc AI đã synthesize citation này từ nhiều nguồn khác nhau.
-      </div>
-      <div style="background:white; border:1px solid var(--gray-200); border-radius:8px; padding:12px; margin-bottom:12px;">
-        <div style="font-size:11px; font-weight:600; margin-bottom:8px; color:var(--gray-800);">Bằng chứng AI đang dùng:</div>
-        <div style="font-size:11px; color:var(--gray-600); margin-bottom:4px;">• Claim "O(n√n) complexity" — tìm thấy concept này trong Child et al. 2019 (Sparse Transformer)</div>
-        <div style="font-size:11px; color:var(--gray-600); margin-bottom:4px;">• Nhưng "Lin et al., 2021" cụ thể → không có record trong database</div>
-        <div style="font-size:11px; color:var(--red);">• Đây có thể là hallucinated citation</div>
-      </div>
-      <div style="font-size:11px; font-weight:600; color:var(--gray-600); margin-bottom:8px;">Bạn muốn làm gì?</div>
-      <div class="btn-row">
-        <button class="btn btn-danger btn-sm" onclick="removeCitation()">🗑️ Xóa citation này</button>
-        <button class="btn btn-secondary btn-sm" onclick="replaceWithReal()">🔄 Thay bằng Child et al. 2019</button>
-        <button class="btn btn-secondary btn-sm">🔍 Tôi sẽ tự tìm paper</button>
-        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('hallucination-panel').style.display='none'">Bỏ qua</button>
-      </div>
-    </div>
-
-    <!-- After fix state -->
-    <div id="fixed-panel" style="display:none;">
-      <div class="success-box">✓ Đã thay [Lin et al., 2021] → [Child et al., 2019 — Generating Long Sequences with Sparse Transformers]. Citation đã được verify. AI sẽ ghi nhớ để không repeat lỗi này trong section tiếp theo.</div>
-      <div style="font-size:11px; color:var(--gray-400); margin-bottom:8px;">Hệ thống đã ghi nhận: claim "O(n√n) complexity" có source thật → move từ "suspect" sang "verified".</div>
-    </div>
-
-    <div class="divider"></div>
-    <!-- S5: Act — auto format -->
-    <div style="background:var(--blue-light); border:1px solid var(--blue-mid); border-radius:8px; padding:12px;">
-      <div style="display:flex; align-items:center; justify-content:space-between;">
-        <div>
-          <div style="font-size:12px; font-weight:500; color:var(--blue);">🤖 AI suggestion: <span class="tag tag-act">ACT</span></div>
-          <div style="font-size:11px; color:#1e40af; margin-top:2px;">AI phát hiện 3 citations dùng APA, 2 dùng IEEE. Muốn tôi tự động convert tất cả sang BibTeX/IEEE?</div>
-          <div style="font-size:10px; color:var(--gray-400); margin-top:2px;">Dễ undo — bạn có thể revert bất kỳ lúc nào</div>
+      <div id="s1-result" style="display:none">
+        <div class="header-note">AI đã kiểm tra từng câu trong bài viết với nguồn gốc của nó. Mỗi câu được gắn 1 trong 4 mức: <b>Đã xác minh</b> / <b>Xác minh một phần</b> / <b>Không xác minh được</b> / <b>Cần bạn xem lại</b>.</div>
+        <div class="legend">
+          <span><span class="dot" style="background:var(--green)"></span> Supported (snippet/arxiv)</span>
+          <span><span class="dot" style="background:var(--orange)"></span> Partially Supported</span>
+          <span><span class="dot" style="background:var(--red)"></span> Unsupported</span>
+          <span><span class="dot" style="background:#caa83b"></span> Case C — chưa đủ dữ liệu</span>
+          <span><span class="dot" style="background:var(--priority)"></span> Ưu tiên xem (contrasting intent)</span>
         </div>
-        <div style="display:flex; gap:6px;">
-          <button class="btn btn-primary btn-sm">✓ Auto-format</button>
-          <button class="btn btn-secondary btn-sm">Không, tôi tự làm</button>
+        <div class="claim-list">
+          <div class="claim-card">
+            <p class="claim-text">"Mô hình SPECTER2 cải thiện độ chính xác truy hồi văn bản học thuật so với SPECTER v1."</p>
+            <span class="badge green">✓ Supported</span><span class="badge gray" style="background:var(--blue-bg);color:var(--blue)">snippet</span>
+            <button class="src-link" onclick="toggleEv(this)">Xem nguồn</button>
+            <div class="evidence-box"><div class="lbl">Trích đoạn nguồn (Semantic Scholar snippet)</div>"...SPECTER2 adapter-based embeddings show consistent improvement in retrieval precision over the original SPECTER model across benchmark tasks..."</div>
+            <div class="resolved-tag">✓ Đã tự động giữ lại</div>
+          </div>
+          <div class="claim-card">
+            <p class="claim-text">"Phương pháp RAG giảm đáng kể tỉ lệ hallucination trong sinh nội dung học thuật."</p>
+            <span class="badge orange">◐ Partially Supported</span><span class="badge gray" style="background:var(--blue-bg);color:var(--blue)">arxiv</span>
+            <div class="row-actions">
+              <button class="btn small" onclick="resolveCard(this,'Đã giữ')">Giữ nguyên</button>
+              <button class="btn small" onclick="resolveCard(this,'Đang chỉnh sửa')">Sửa claim</button>
+              <button class="btn small danger" onclick="resolveCard(this,'Đã xóa')">Xóa</button>
+            </div>
+            <div class="resolved-tag" style="display:none"></div>
+          </div>
+          <div class="claim-card">
+            <p class="claim-text">"Citation snowballing giúp mở rộng pool paper liên quan mà không cần curation thủ công."</p>
+            <span class="badge green">✓ Supported</span><span class="badge gray" style="background:var(--blue-bg);color:var(--blue)">arxiv</span>
+            <button class="src-link" onclick="toggleEv(this)">Xem nguồn</button>
+            <div class="evidence-box"><div class="lbl">Trích đoạn nguồn (ar5iv fulltext)</div>"...the snowballing procedure automatically expands the candidate pool via citation links, reducing manual curation effort while preserving relevance..."</div>
+            <div class="resolved-tag">✓ Đã tự động giữ lại</div>
+          </div>
+        </div>
+        <div class="summary-line">8 claims tự động giữ · 3 claims cần bạn xem · 1 claim đã tự xóa</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN 2: PARTIALLY SUPPORTED -->
+  <div class="screen" data-screen="2">
+    <div class="panel">
+      <h2>Kịch bản 2 — Partially Supported (P2)</h2>
+      <p class="desc">Nguồn chỉ khớp một phần claim. AI không diễn giải hộ — chỉ hiển thị song song để user tự so sánh.</p>
+      <div class="claim-card">
+        <span class="badge orange">◐ Partially Supported</span><span class="badge gray" style="background:var(--blue-bg);color:var(--blue)">arxiv</span>
+        <div class="compare-grid" style="margin-top:10px">
+          <div class="compare-box"><div class="lbl">Claim viết</div>"Model X giảm 40% latency trong mọi tình huống triển khai."</div>
+          <div class="compare-box"><div class="lbl">Nguồn tìm được</div>"Model X giảm latency 40% trong benchmark A (batch size = 1, GPU T4)."</div>
+        </div>
+        <div class="header-note" style="margin-top:8px">AI thấy nguồn chỉ khớp một phần với claim này — có thể do claim tổng quát hóa quá mức, hoặc do nguồn chưa đủ chi tiết.</div>
+        <div class="row-actions">
+          <button class="btn success" onclick="markChoice(this,'Đã chọn: Giữ nguyên')">Giữ nguyên</button>
+          <button class="btn" onclick="openEdit(this)">Sửa claim</button>
+          <button class="btn danger" onclick="markChoice(this,'Đã chọn: Xóa')">Xóa</button>
+        </div>
+        <textarea class="edit-box" placeholder="Sửa lại claim cho khớp với nguồn, ví dụ: 'Model X giảm 40% latency trong benchmark A.'"></textarea>
+        <div class="resolved-tag" style="margin-top:8px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN 3: AUTO-DELETE UNSUPPORTED -->
+  <div class="screen" data-screen="3">
+    <div class="panel">
+      <h2>Kịch bản 3 — AI tự xóa claim Unsupported (P3 — Agency boundary)</h2>
+      <p class="desc">Nguồn xác nhận mâu thuẫn → AI tự xóa (Act có giám sát), nhưng luôn hiện log + cho khôi phục ngay.</p>
+      <div class="claim-list">
+        <div class="claim-card"><p class="claim-text">"Phương pháp Y vượt trội mọi baseline trong tác vụ summarization."</p><span class="badge green">✓ Supported</span></div>
+        <div class="deleted-line" id="s3-line">
+          ⚠️ Đã tự động xóa 1 câu do không tìm được nguồn ủng hộ — <button class="src-link" onclick="toggleDel()">Xem chi tiết</button>
+          <div class="deleted-detail" id="s3-detail">
+            <p class="claim-text strike">"Phương pháp Z đã được chứng minh là an toàn tuyệt đối trong mọi pipeline production."</p>
+            <div class="lbl" style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Lý do</div>
+            <p style="font-size:12.5px;margin:4px 0 10px">Nguồn nói "Phương pháp Z giảm rủi ro lỗi trong một số trường hợp thử nghiệm" — mâu thuẫn với claim "an toàn tuyệt đối / mọi pipeline".</p>
+            <div class="row-actions">
+              <button class="btn success" onclick="restoreClaim()">↺ Khôi phục</button>
+              <button class="btn" onclick="confirmDelete()">Đồng ý xóa</button>
+            </div>
+            <div class="resolved-tag" id="s3-resolved" style="margin-top:8px"></div>
+          </div>
+        </div>
+        <div class="claim-card"><p class="claim-text">"Hybrid search (BM25 + semantic) cải thiện recall so với chỉ dùng semantic search."</p><span class="badge green">✓ Supported</span></div>
+      </div>
+      <div class="tab-bar" style="margin-top:16px">
+        <button class="active" id="s3-tab-main" onclick="switchTab3('main')">Danh sách chính</button>
+        <button id="s3-tab-deleted" onclick="switchTab3('deleted')">Đã xóa tự động (1)</button>
+      </div>
+      <div class="tabpane active" id="s3-pane-main"><p style="font-size:12.5px;color:var(--muted)">(Danh sách claim hiển thị phía trên)</p></div>
+      <div class="tabpane" id="s3-pane-deleted">
+        <div class="claim-card"><p class="claim-text strike">"Phương pháp Z đã được chứng minh là an toàn tuyệt đối trong mọi pipeline production."</p><span class="badge red">✗ Unsupported — đã xóa</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN 4: CASE C / ABSTRACT ONLY -->
+  <div class="screen" data-screen="4">
+    <div class="panel">
+      <h2>Kịch bản 4 — Case C: chỉ có abstract (P4 — Uncertainty)</h2>
+      <p class="desc">Thiếu toàn văn → AI không thể xác minh sâu, nhưng KHÔNG có nghĩa claim sai. Badge và banner tách riêng để không gây hiểu lầm.</p>
+      <div class="toggle-line">Demo: <button class="btn small" onclick="toggleBanner()">Bật/tắt banner (giả lập >30% claim là Case C)</button></div>
+      <div class="banner" id="s4-banner">⚠ Theme này có nhiều nguồn không có toàn văn công khai — AI không thể xác minh sâu. Bạn nên tự kiểm tra kỹ hơn các claim được đánh dấu "Chưa đủ dữ liệu".</div>
+      <div class="claim-list">
+        <div class="claim-card">
+          <p class="claim-text">"Nghiên cứu của Nguyễn et al. (2019) cho thấy phương pháp truyền thống có hạn chế về khả năng mở rộng."</p>
+          <span class="badge gray">◌ Chưa đủ dữ liệu để xác minh</span><span class="badge gray" style="background:var(--blue-bg);color:var(--blue)">abstract</span>
+          <button class="src-link" onclick="toggleEv(this)">Xem abstract</button>
+          <div class="evidence-box"><div class="lbl">Abstract gốc</div>"This paper surveys scalability limitations of conventional methods in large-scale deployment scenarios..."</div>
+          <div class="header-note" style="margin-top:8px">AI chỉ tìm được tóm tắt (abstract) của nguồn này, không có toàn văn — nên không thể xác minh chi tiết. Không có nghĩa là claim sai.</div>
+          <div class="row-actions">
+            <button class="btn success" onclick="markChoice(this,'Đã chọn: Giữ')">Giữ</button>
+            <button class="btn danger" onclick="markChoice(this,'Đã chọn: Xóa')">Xóa</button>
+          </div>
+          <div class="resolved-tag" style="margin-top:6px"></div>
         </div>
       </div>
     </div>
-    <div class="btn-row">
-      <button class="btn btn-primary" onclick="show('p06')">→ Export / Edit LaTeX</button>
+  </div>
+
+  <!-- SCREEN 5: CONTRASTING INTENT + RECOVERY -->
+  <div class="screen" data-screen="5">
+    <div class="panel">
+      <h2>Kịch bản 5 — AI đoán sai "contrasting intent" + vòng Feedback/Recovery (P5/P6)</h2>
+      <p class="desc">Suy đoán ý định trái chiều có độ tin cậy thấp nhất trong pipeline — luôn cần Ask, và phản hồi cũ chỉ giảm priority, không tắt hẳn cảnh báo.</p>
+      <div class="claim-card" id="s5-card">
+        <p class="claim-text">"Tuy nhiên, phương pháp fine-tuning truyền thống vẫn tồn tại một số hạn chế đáng kể về chi phí tính toán."</p>
+        <span class="badge priority" id="s5-badge">🔺 Ưu tiên xem</span>
+        <div class="header-note" style="margin-top:8px">Câu này có vẻ trái chiều với phần lập luận chung của theme — AI đẩy lên ưu tiên để bạn xác nhận có đúng ý không.</div>
+        <div class="row-actions">
+          <button class="btn success" onclick="s5choice('agree')">Đồng ý</button>
+          <button class="btn danger" onclick="s5choice('disagree')">Không đồng ý</button>
+        </div>
+        <div class="feedback-box" id="s5-feedback">
+          <textarea class="input-reason" rows="2" placeholder="Bạn có thể cho biết vì sao không? (không bắt buộc)"></textarea>
+          <button class="btn small primary" style="margin-top:6px" onclick="s5submit()">Gửi phản hồi</button>
+        </div>
+        <div class="resolved-tag" id="s5-resolved" style="margin-top:8px"></div>
+      </div>
+      <div class="toggle-line" style="margin-top:14px">Demo bước sau: <button class="btn small" id="s5-next-theme" onclick="s5nextTheme()" disabled>▶ Verify theme tiếp theo (mô phỏng pattern lặp lại)</button></div>
+      <div class="note-learn" id="s5-learn">Trước đó bạn đã đánh dấu 1 case tương tự là "không phải lỗi" — AI vẫn đẩy lên review vì muốn chắc chắn, nhưng đã giảm độ ưu tiên.</div>
     </div>
   </div>
 
-  <div class="annotation">
-    <div class="rationale-title">Design rationale — S4 Citation Hallucination Recovery</div>
-    <div class="rationale-row"><span class="rationale-q">Điều gì có thể sai?</span><span class="rationale-a">AI synthesize citation không tồn tại. Researcher sử dụng → academic dishonesty / retraction risk</span></div>
-    <div class="rationale-row"><span class="rationale-q">Hậu quả?</span><span class="rationale-a">Rất nghiêm trọng — ảnh hưởng uy tín nghiên cứu, có thể bị retract paper</span></div>
-    <div class="rationale-row"><span class="rationale-q">Explainability?</span><span class="rationale-a">Show "bằng chứng AI đang dùng" → user thấy AI suy luận từ đâu, không chỉ nói "citation sai"</span></div>
-    <div class="rationale-row"><span class="rationale-q">Recovery?</span><span class="rationale-a">3 paths: xóa / thay bằng paper thật / user tự tìm. Không dead end. AI confirm đã ghi nhớ fix.</span></div>
-    <div class="rationale-row"><span class="rationale-q">S5 Agency?</span><span class="rationale-a"><span class="tag tag-act">ACT</span> cho auto-format citations vì: rủi ro thấp, dễ undo, tiết kiệm thời gian, user muốn giao</span></div>
-  </div>
+  <footer class="notebox">
+    Prototype này mô phỏng trạng thái & tương tác (không kết nối backend/LLM thật) — đi kèm với file báo cáo <code>day18_lab_claim_verification_design.md</code> chứa đầy đủ rationale, bảng Act/Ask/Don't Act, feedback matrix và 10-câu hỏi thiết kế cho từng kịch bản.
+  </footer>
 </div>
 
-<!-- ========== PAGE 06: FEEDBACK 2x2 ========== -->
-<div class="screen" id="p06">
-  <div class="page-title">06 — Feedback loop 2×2</div>
-  <div class="page-sub">Ma trận: User/System × Explicit/Implicit</div>
-
-  <div class="card">
-    <div class="matrix">
-      <div class="matrix-header"></div>
-      <div class="matrix-header">Explicit — Tường minh</div>
-      <div class="matrix-header">Implicit — Ngầm định</div>
-
-      <div class="matrix-label">User → System</div>
-      <div class="matrix-cell">
-        <div style="margin-bottom:6px;"><span class="badge badge-blue" style="font-size:10px; margin-bottom:4px;">Ở đâu?</span></div>
-        <div style="font-size:11px; line-height:1.7;">
-          • Int.1: User <strong>edit sub-query</strong> "quá rộng" → submit revised query<br>
-          • Int.3: User click <strong>"Rescue"</strong> + cung cấp DOI cho removed claim<br>
-          • S4: User click <strong>"Thay bằng paper thật"</strong> cho citation suspect<br>
-          • Nút <strong>👍/👎</strong> cho từng section output
-        </div>
-        <div style="margin-top:8px; font-size:10px; color:var(--gray-400);">Rationale: Tường minh vì user cần deliberate action — AI không tự đoán ý định</div>
-      </div>
-      <div class="matrix-cell">
-        <div style="margin-bottom:6px;"><span class="badge badge-gray" style="font-size:10px; margin-bottom:4px;">Hệ thống observe</span></div>
-        <div style="font-size:11px; line-height:1.7;">
-          • User <strong>approve outline ngay không sửa</strong> → signal: AI hiểu đúng topic<br>
-          • User <strong>spend &gt;3 min ở Int.1</strong> → signal: uncertain về sub-queries<br>
-          • User <strong>rescue nhiều claims</strong> từ "removed" → signal: AI search sources quá hẹp<br>
-          • User <strong>undo auto-format</strong> → signal: AI dùng sai citation style
-        </div>
-        <div style="margin-top:8px; font-size:10px; color:var(--gray-400);">Rationale: Không làm gián đoạn user. Observe behavior, nhưng không tự coi là ground truth</div>
-      </div>
-
-      <div class="matrix-label">System → User</div>
-      <div class="matrix-cell">
-        <div style="margin-bottom:6px;"><span class="badge badge-green" style="font-size:10px; margin-bottom:4px;">Hiển thị trực tiếp</span></div>
-        <div style="font-size:11px; line-height:1.7;">
-          • Progress steps: <strong>"Bước 2/4: Clustering…"</strong><br>
-          • Badge <strong>"⚠️ 3 citations suspect"</strong> trên output panel<br>
-          • Warning khi AI không tìm thấy source: <strong>"Citation not found"</strong><br>
-          • Confidence bar cho từng claim (25% / 60% / 95%)<br>
-          • Confirmation: <strong>"Đã ghi nhớ fix này cho section tiếp theo"</strong>
-        </div>
-        <div style="margin-top:8px; font-size:10px; color:var(--gray-400);">Rationale: Explicit vì user cần biết trạng thái AI để ra quyết định</div>
-      </div>
-      <div class="matrix-cell">
-        <div style="margin-bottom:6px;"><span class="badge badge-gray" style="font-size:10px; margin-bottom:4px;">Qua design</span></div>
-        <div style="font-size:11px; line-height:1.7;">
-          • <strong>Color coding</strong>: xanh/vàng/đỏ cho claims theo confidence — user học pattern<br>
-          • <strong>Dim</strong> removed claims thay vì xóa hẳn → signal "vẫn có thể rescue"<br>
-          • <strong>▸ arrow</strong> trên cluster reason → signal "có thể expand để xem thêm"<br>
-          • Step indicator <strong>mờ</strong> cho pending steps → user biết còn bước nữa
-        </div>
-        <div style="margin-top:8px; font-size:10px; color:var(--gray-400);">Rationale: Progressive disclosure — dùng visual cue trước, chỉ interrupt khi user thực sự cần help</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-title">Nguyên tắc feedback trong prototype này</div>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;">
-      <div style="font-size:11px; color:var(--gray-600); line-height:1.8;">
-        <strong>Make it easy:</strong><br>
-        Rescue = 1 click + paste DOI. Không cần fill form dài.
-      </div>
-      <div style="font-size:11px; color:var(--gray-600); line-height:1.8;">
-        <strong>Show benefit:</strong><br>
-        "AI sẽ ghi nhớ fix này cho section tiếp theo" — user thấy lý do feedback.
-      </div>
-      <div style="font-size:11px; color:var(--gray-600); line-height:1.8;">
-        <strong>Context-placed:</strong><br>
-        Feedback xuất hiện ngay tại claim suspect, không popup riêng.
-      </div>
-      <div style="font-size:11px; color:var(--gray-600); line-height:1.8;">
-        <strong>Implicit ≠ ground truth:</strong><br>
-        User undo ≠ AI sai. Có thể user đổi ý. Hệ thống không tự label.
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ========== PAGE 07: DEMO PATH ========== -->
-<div class="screen" id="p07">
-  <div class="page-title">07 — Demo path (5 phút)</div>
-  <div class="page-sub">Click path cho giảng viên chạy trong 5 phút</div>
-  <div class="card">
-    <div style="display:grid; gap:10px;">
-      <div style="display:flex; align-items:flex-start; gap:12px; padding:10px; background:var(--green-light); border-radius:8px;">
-        <div style="background:var(--green); color:white; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; flex-shrink:0;">0:30</div>
-        <div><div style="font-size:12px; font-weight:500;">User, problem, slice</div><div style="font-size:11px; color:var(--gray-600);">Tab 00 → giới thiệu: researchers/students cần tool verify citations + steer AI research direction</div></div>
-      </div>
-      <div style="display:flex; align-items:flex-start; gap:12px; padding:10px; background:var(--blue-light); border-radius:8px;">
-        <div style="background:var(--blue); color:white; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; flex-shrink:0;">1:15</div>
-        <div><div style="font-size:12px; font-weight:500;">Onboarding → Plan review</div><div style="font-size:11px; color:var(--gray-600);">Tab 01 (onboarding) → Tab 02: click "✏️ Sửa" query #3, show edit panel, save → approve plan</div></div>
-      </div>
-      <div style="display:flex; align-items:flex-start; gap:12px; padding:10px; background:var(--blue-light); border-radius:8px;">
-        <div style="background:var(--blue); color:white; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; flex-shrink:0;">2:15</div>
-        <div><div style="font-size:12px; font-weight:500;">Outline + Explainability</div><div style="font-size:11px; color:var(--gray-600);">Tab 03: click "▸ Xem lý do AI cluster" cluster 3 → show yellow warning → click "✂️ Split" → approve outline</div></div>
-      </div>
-      <div style="display:flex; align-items:flex-start; gap:12px; padding:10px; background:var(--red-light); border-radius:8px;">
-        <div style="background:var(--red); color:white; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; flex-shrink:0;">3:45</div>
-        <div><div style="font-size:12px; font-weight:500;">Failure & Recovery (×2)</div><div style="font-size:11px; color:var(--gray-600);">Tab 04: click "🔄 Rescue" claim "O(n√n)" → show rescue panel → Tab 05: click [Lin et al., 2021] → show hallucination panel → click "🔄 Thay bằng Child et al."</div></div>
-      </div>
-      <div style="display:flex; align-items:flex-start; gap:12px; padding:10px; background:var(--purple-light); border-radius:8px;">
-        <div style="background:var(--purple); color:white; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; flex-shrink:0;">4:45</div>
-        <div><div style="font-size:12px; font-weight:500;">Feedback 2×2</div><div style="font-size:11px; color:var(--gray-600);">Tab 06: walk through 4 ô matrix. Highlight implicit system feedback: color coding claims = progressive disclosure</div></div>
-      </div>
-      <div style="display:flex; align-items:flex-start; gap:12px; padding:10px; background:var(--gray-100); border-radius:8px;">
-        <div style="background:var(--gray-600); color:white; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; flex-shrink:0;">5:00</div>
-        <div><div style="font-size:12px; font-weight:500;">Key design decision</div><div style="font-size:11px; color:var(--gray-600);">"Interrupt 3 không được là informational-only. Citation hallucination là failure mode nghiêm trọng nhất → phải cho rescue với evidence."</div></div>
-      </div>
-    </div>
-  </div>
-</div>
+<div class="toast" id="toast"></div>
 
 <script>
-function show(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  const idx = ['p00','p01','p02','p03','p04','p05','p06','p07'].indexOf(id);
-  document.querySelectorAll('.nav-tab')[idx].classList.add('active');
-  window.scrollTo(0,0);
+const screens=[1,2,3,4,5];
+const titles={1:"1. Onboarding",2:"2. Partial",3:"3. Auto-delete",4:"4. Case C",5:"5. Recovery"};
+const navEl=document.getElementById('nav');
+screens.forEach(n=>{
+  const b=document.createElement('button');
+  b.textContent=titles[n];
+  b.dataset.n=n;
+  if(n===1)b.classList.add('active');
+  b.onclick=()=>showScreen(n);
+  navEl.appendChild(b);
+});
+document.getElementById('s1-start').onclick=function(){
+  document.getElementById('s1-pre').style.display='none';
+  document.getElementById('s1-progress').style.display='block';
+  let i=0;
+  const fill=document.getElementById('s1-pfill');
+  const label=document.getElementById('s1-plabel');
+  const timer=setInterval(()=>{
+    i++;
+    fill.style.width=(i/12*100)+'%';
+    label.textContent=`Đang kiểm tra nguồn cho 12 claims... (${i}/12)`;
+    if(i>=12){
+      clearInterval(timer);
+      setTimeout(()=>{
+        document.getElementById('s1-progress').style.display='none';
+        document.getElementById('s1-result').style.display='block';
+        toast('Verify hoàn tất!');
+      },300);
+    }
+  },120);
+};
+
+function showScreen(n){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active', +s.dataset.screen===n));
+  document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active', +b.dataset.n===n));
 }
-function showEditPanel() {
-  const p = document.getElementById('edit-panel');
-  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer=setTimeout(()=>t.classList.remove('show'),1800);
 }
-function saveQuery() {
-  const v = document.getElementById('new-query').value;
-  document.getElementById('q3-text').textContent = '3. ' + v;
-  document.getElementById('q3').style.borderLeftColor = 'var(--green)';
-  document.getElementById('q3').querySelector('div[style]').innerHTML = '<span style="font-size:10px; color:var(--green);">✓ Query đã được cập nhật</span>';
-  document.getElementById('edit-panel').style.display = 'none';
+
+function toggleEv(btn){
+  const box=btn.parentElement.querySelector('.evidence-box');
+  box.classList.toggle('open');
 }
-function editQuery(btn) {
-  alert('Inline edit cho query này (demo: query #3 có sẵn edit panel bên dưới)');
+
+function resolveCard(btn,label){
+  const card=btn.closest('.claim-card');
+  card.querySelector('.row-actions').style.display='none';
+  const tag=card.querySelector('.resolved-tag');
+  tag.style.display='block'; tag.textContent=(label==='Đã xóa'?'✓ ':'✓ ')+label;
+  toast(label);
 }
-function toggleReason(id) {
-  const el = document.getElementById(id);
-  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+
+function markChoice(btn,label){
+  const card=btn.closest('.claim-card');
+  card.querySelector('.row-actions').style.display='none';
+  const tag=card.querySelector('.resolved-tag');
+  tag.textContent=label;
+  toast(label);
 }
-function rescueClaim() {
-  document.getElementById('rescue-panel').style.display = 'block';
+
+function openEdit(btn){
+  const card=btn.closest('.claim-card');
+  const box=card.querySelector('.edit-box');
+  box.classList.add('open');
+  box.value="Model X giảm 40% latency trong benchmark A.";
+  card.querySelector('.row-actions').style.display='none';
+  card.querySelector('.resolved-tag').textContent='✏️ Đang sửa — bấm ngoài ô để lưu (demo)';
+  toast('Đã mở ô sửa claim');
 }
-function confirmRescue() {
-  document.getElementById('claim-sparse').classList.remove('removed');
-  document.getElementById('claim-sparse').classList.add('needs-review');
-  document.getElementById('rescue-panel').style.display = 'none';
-  document.getElementById('claim-sparse').querySelector('.claim-source').textContent = '✓ Source provided: Child et al., 2019 — Generating Long Sequences with Sparse Transformers. AI đang verify...';
+
+function toggleDel(){ document.getElementById('s3-detail').classList.toggle('open'); }
+function restoreClaim(){
+  document.getElementById('s3-line').style.display='none';
+  document.getElementById('s3-resolved').textContent='';
+  switchTab3('main');
+  toast('Đã khôi phục claim');
 }
-function showHallucinationPanel() {
-  document.getElementById('hallucination-panel').style.display = 'block';
+function confirmDelete(){
+  document.getElementById('s3-resolved').textContent='✓ Đã xác nhận xóa';
+  toast('Đã đồng ý xóa — vẫn lưu trong tab "Đã xóa tự động"');
 }
-function removeCitation() {
-  document.getElementById('hallucination-panel').style.display = 'none';
-  document.getElementById('fixed-panel').style.display = 'block';
-  document.getElementById('fixed-panel').innerHTML = '<div class="success-box">✓ Đã xóa citation [Lin et al., 2021]. Claim về O(n√n) complexity cần được support bởi citation khác hoặc xóa khỏi review.</div>';
+function switchTab3(which){
+  document.getElementById('s3-tab-main').classList.toggle('active',which==='main');
+  document.getElementById('s3-tab-deleted').classList.toggle('active',which==='deleted');
+  document.getElementById('s3-pane-main').classList.toggle('active',which==='main');
+  document.getElementById('s3-pane-deleted').classList.toggle('active',which==='deleted');
 }
-function replaceWithReal() {
-  document.getElementById('hallucination-panel').style.display = 'none';
-  document.getElementById('fixed-panel').style.display = 'block';
+
+function toggleBanner(){ document.getElementById('s4-banner').classList.toggle('show'); }
+
+function s5choice(type){
+  const card=document.getElementById('s5-card');
+  card.querySelector('.row-actions').style.display='none';
+  if(type==='agree'){
+    document.getElementById('s5-badge').textContent='✓ Đã xác nhận: cố ý trái chiều';
+    document.getElementById('s5-badge').className='badge green';
+    document.getElementById('s5-resolved').textContent='Đồng ý — không cần xử lý thêm';
+    document.getElementById('s5-next-theme').disabled=false;
+    toast('Đã ghi nhận: Đồng ý');
+  } else {
+    document.getElementById('s5-feedback').classList.add('open');
+  }
+}
+function s5submit(){
+  document.getElementById('s5-badge').remove ? null : null;
+  document.getElementById('s5-feedback').classList.remove('open');
+  document.getElementById('s5-resolved').textContent='Đã gửi: "Không đồng ý" — badge ưu tiên đã ẩn cho session này';
+  document.getElementById('s5-badge').style.display='none';
+  document.getElementById('s5-next-theme').disabled=false;
+  toast('Đã ghi nhận phản hồi — cảm ơn bạn!');
+}
+function s5nextTheme(){
+  document.getElementById('s5-learn').classList.add('show');
+  toast('Mô phỏng: theme tiếp theo, pattern tương tự xuất hiện lại với priority đã giảm');
 }
 </script>
 </body>
